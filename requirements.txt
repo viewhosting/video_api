@@ -1,0 +1,9 @@
+fastapi
+uvicorn
+moviepy
+numpy<2.0.0
+Pillow
+imageio
+imageio-ffmpeg
+requests
+pydantic

@@ -1,0 +1,220 @@
+# ==============================================================================
+# GUÍA DE USO DE LA API DE VIDEO (BVR)
+# ==============================================================================
+
+# Esta API permite generar videos con superposiciones gráficas (overlays) dinámicas.
+# Se pueden enviar peticiones en dos formatos:
+# 1. JSON PURO (application/json): Ideal cuando todos los recursos (videos, imágenes, fuentes) son URLs públicas.
+# 2. MULTIPART (multipart/form-data): Necesario si vas a subir archivos locales (video base, logo, fuentes, audio).
+
+# ==========================================
+# 1. PARÁMETROS GLOBALES
+# ==========================================
+# Estos parámetros van en la raíz del JSON.
+
+{
+  "nombre": "resultado.mp4",    # Nombre del archivo de salida
+  "ancho": 2550,                # Ancho del canvas (Default: 2550 para 2K)
+  "alto": 2040,                 # Alto del canvas (Default: 2040)
+  "inicio": 0,                  # (Opcional) Segundo de inicio para recortar el video base
+  "fin": 10,                    # (Opcional) Segundo de fin para recortar el video base
+  "zoom": 1.0,                  # (Opcional) Multiplicador de resolución (ver sección 11)
+  "audio_tipo": "mudo",         # (Opcional) Gestión de audio (ver sección 12)
+  "json": true                  # (Requerido solo en modo JSON PURO para activar descargas)
+}
+
+# ==========================================
+# 2. TIPOGRAFÍAS Y FUENTES
+# ==========================================
+# Puedes usar fuentes del sistema o subir tus propias fuentes (.ttf).
+# El sistema escanea las fuentes disponibles y busca la mejor coincidencia.
+
+# A. Cargar Fuentes (URLs)
+# ------------------------
+{
+  "tipografia": [
+    "https://misitio.com/fonts/Montserrat-Bold.ttf",
+    "https://misitio.com/fonts/Roboto-Regular.ttf"
+  ]
+}
+
+# B. Usar Fuentes en Elementos
+# ----------------------------
+# Usa "tipografia" (familia) y "peso" (estilo).
+# El sistema es inteligente: si pides "Montserrat" con peso "Bold", buscará variaciones como "Montserrat-Bold", "MontserratBold", etc.
+{
+  "tipo": "texto",
+  "contenido": "Hola Mundo",
+  "tipografia": "Montserrat",   # Nombre de la familia
+  "peso": "bold"                # Opciones: "thin", "light", "regular", "medium", "bold", "extrabold", "black"
+}
+
+# ==========================================
+# 3. ESTRUCTURA DEL LAYOUT
+# ==========================================
+# El diseño se organiza en bloques y áreas predefinidas.
+
+{
+  "layout": {
+    "texto_superior": "TITULO PRINCIPAL",  # Texto simple arriba
+    "texto_inferior": "Pie de página",     # Texto simple abajo
+    "logo": "https://...",                 # URL del logo (o archivo subido en multipart)
+    
+    # Bloques de contenido dinámico (Capas)
+    "bloque_1": { ... },
+    "bloque_2": { ... },
+    "bloque_3": { ... }
+  }
+}
+
+# ==========================================
+# 4. TIPOS DE CAPAS (BLOQUES)
+# ==========================================
+# Cada "bloque_X" debe tener un "tipo".
+
+# A. IMAGEN
+# ---------
+{
+  "tipo": "imagen",
+  "url": "https://...",        # URL de la imagen
+  "posicion": "center, center", # "x,y" o palabras clave (center, left, right, top, bottom)
+  "size": "50%, 50%"            # Tamaño (pixels o %)
+}
+
+# B. VIDEO (Picture in Picture)
+# -----------------------------
+{
+  "tipo": "video",
+  "url": "https://...",
+  "posicion": "100, 100",
+  "size": "600, 400",
+  "volumen": 0.5                # 0.0 a 1.0
+}
+
+# C. TICKER (Marquesina de texto)
+# -------------------------------
+{
+  "tipo": "ticker",
+  "contenido": "ÚLTIMA HORA: Este texto se desplaza...",
+  "posicion": "0, bottom",
+  "size": "100%, 100",
+  "bg_color": "#FF0000",
+  "color": "#FFFFFF",
+  "velocidad": 200              # Pixels por segundo
+}
+
+# D. TEXTO DOS COLUMNAS (Legacy)
+# ------------------------------
+{
+  "tipo": "texto_dos_columnas",
+  "posicion": "center, center",
+  "size": "80%, 300",
+  "col1_contenido": "Izquierda",
+  "col2_contenido": "Derecha",
+  "divisor": true               # Línea vertical central
+}
+
+# ==========================================
+# 5. TEXTO VARIAS COLUMNAS (NUEVO)
+# ==========================================
+# Permite N columnas con anchos dinámicos y estilos independientes.
+
+{
+  "tipo": "texto_varias_columnas",
+  "posicion": "center, 500",
+  "size": "90%, 400",
+  "gap": 20,                    # Espacio entre columnas
+  "divisor": true,              # Línea divisoria entre columnas
+  "divisor_color": "#FFFFFF",
+  
+  # Estilos Globales (aplican a todas si no se sobrescriben)
+  "tipografia": "Montserrat",
+  "peso": "bold",
+  "size_texto": 40,
+  "color": "#FFFFFF",
+  "borde_grosor": 2,            # Borde del texto (stroke)
+  "borde_color": "#000000",
+  
+  "columnas": [
+    {
+      "contenido": "Columna 1\n(Auto Ancho)",
+      "alineacion": "center"
+    },
+    {
+      "contenido": "Columna 2\n(30% Ancho)",
+      "width": "30%",           # Porcentaje del ancho disponible
+      "color": "#FFFF00",       # Color específico
+      "bg_color": "#000000",    # Fondo específico para esta columna
+      "bg_transparencia": 0.5
+    },
+    {
+      "contenido": "Columna 3\n(Fija)",
+      "width": 200,             # Pixels fijos
+      "peso": "light"
+    }
+  ]
+}
+
+# ==========================================
+# 10. USO DE ICONOS (FONT AWESOME 6)
+# ==========================================
+# El sistema incluye FontAwesome 6 Solid.
+# Para usar un icono, copia el "Unicode Glyph" de la web de FontAwesome (ej. f007).
+# Usa el formato "\uXXXX" dentro del texto.
+
+{
+  "tipo": "texto",
+  "contenido": "\uf007 Usuario  \uf095 Teléfono", 
+  "tipografia": "FontAwesome",  # Debes especificar esta fuente
+  "size_texto": 50
+}
+
+# ==========================================
+# 11. ESCALADO DE RESOLUCIÓN (ZOOM)
+# ==========================================
+# El parámetro `zoom` permite escalar el video FINAL (incluyendo todas las capas).
+# Esto es útil para renderizar en baja resolución (rápido) y luego escalar, o para ajustar la salida sin recalcular todas las coordenadas de las capas.
+
+# IMPORTANTE: El zoom se aplica DESPUÉS de renderizar las capas.
+# Si tu layout está diseñado para 1024x820 y usas zoom: 2, el video final será de 2048x1640, pero las capas mantendrán su proporción y posición relativa original.
+
+# Ejemplo:
+{
+  "zoom": 1.5,
+  "ancho": 1024,
+  "alto": 820
+}
+
+# ==========================================
+# 12. GESTIÓN DE AUDIO
+# ==========================================
+# Controla cómo se maneja el audio del video final mediante la llave "audio_tipo".
+# Valores permitidos: "mudo", "original", "remplazo", "mezcla".
+# ------------------------------------------
+
+# Caso A: Sin archivo de audio externo
+# ------------------------------------
+{
+    "audio_tipo": "mudo"     # (Default) El video sale sin audio.
+}
+{
+    "audio_tipo": "original" # Mantiene el audio original del video input.
+}
+
+# Caso B: Con archivo de audio externo (subido o URL)
+# ---------------------------------------------------
+# Nota: Si subes un audio, DEBES especificar "remplazo" o "mezcla".
+# Si omites "audio_tipo", el sistema asumirá "mudo" por defecto.
+
+{
+    "audio": "https://...",
+    "audio_tipo": "remplazo" # Reemplaza totalmente el audio original.
+}
+{
+    "audio": "https://...",
+    "audio_tipo": "mezcla"   # Mezcla el audio original con el nuevo (background music).
+}
+{
+    "audio": "https://...",
+    "audio_tipo": "original" # Ignora el audio externo y usa el original del video.
+}
