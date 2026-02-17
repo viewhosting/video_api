@@ -1771,10 +1771,22 @@
                     addPropInput(container, 'Contenido', obj.text, (v) => { obj.set('text', v); canvas.requestRenderAll(); }, false, 'textarea');
                     
                     if (obj.type === 'textbox') {
-                         addPropInput(container, 'Ancho Caja', obj.width, (v) => { 
-                             obj.set('width', parseInt(v)); 
-                             canvas.requestRenderAll(); 
-                         });
+                        let widthVal = obj.width;
+                        let readOnlyWidth = false;
+
+                        if (refObj && obj !== refObj && refObj.type === 'rect') {
+                            widthVal = Math.round(refObj.getScaledWidth());
+                            obj.set('width', widthVal);
+                            obj.setCoords();
+                            canvas.requestRenderAll();
+                            readOnlyWidth = true;
+                        }
+
+                        addPropInput(container, 'Ancho Caja', widthVal, (v) => { 
+                            if (readOnlyWidth) return;
+                            obj.set('width', parseInt(v)); 
+                            canvas.requestRenderAll(); 
+                        }, readOnlyWidth);
                     }
                     
                     const tipGrid = document.createElement('div');
@@ -2231,7 +2243,11 @@
                  // Texto normal / marquesina
                  el.size_texto = obj.fontSize;
                  if (obj.type === 'textbox' && obj.elementType !== 'marquesina' && obj.elementType !== 'texto_varias_columnas') {
-                     el.width = Math.round(obj.width);
+                     let exportedWidth = Math.round(obj.width);
+                     if (refObj && obj !== refObj && refObj.type === 'rect') {
+                         exportedWidth = Math.round(refObj.getScaledWidth());
+                     }
+                     el.width = exportedWidth;
                  }
             }
 
@@ -2474,8 +2490,12 @@
                     opacity: el.transparencia ? (1 - el.transparencia) : 1
                 });
                 
-                // Handle width if present (for Textbox)
-                if (el.width) {
+                const refInBlock = existingInBlock[0];
+                const shouldLockToRect = !isFirst && refInBlock && refInBlock.type === 'rect';
+
+                if (shouldLockToRect) {
+                    obj.set('width', refInBlock.getScaledWidth());
+                } else if (el.width) {
                     obj.set('width', parseInt(el.width));
                 }
                 // Handle size for marquesina container (use width for preview and store in customProps)

@@ -23,7 +23,10 @@ class RenderEngine:
     def _parse_value(self, val: str, reference_size: int) -> int:
         """
         Parsea un valor que puede ser píxeles ("100") o porcentaje ("50%").
-        Aplica la función de escalado s() si es pixel absoluto.
+        Aplica la función de escalado s() si es pixel absoluto SOLO cuando
+        se está trabajando en el lienzo maestro (CANVAS_W x CANVAS_H).
+        Para lienzos personalizados (ancho/alto distintos), los valores
+        numéricos se interpretan como coordenadas absolutas en ese lienzo.
         """
         val = str(val).strip().lower()
         
@@ -32,13 +35,20 @@ class RenderEngine:
             percentage = float(val.replace("%", "")) / 100.0
             return int(reference_size * percentage)
         else:
-            # Es pixel absoluto: "100" -> s(100)
             try:
-                # Asumimos que el input viene en coordenadas "lógicas" (diseño base)
-                # y s() lo escala a 2K/4K si es necesario.
-                return s(float(val))
+                base_val = float(val)
             except ValueError:
                 return 0
+
+            # Si el lienzo actual coincide con el maestro, usamos escala s()
+            if self.canvas_w == CANVAS_W and self.canvas_h == CANVAS_H:
+                try:
+                    return s(base_val)
+                except Exception:
+                    return int(base_val)
+            else:
+                # Lienzo personalizado: el valor ya viene en coordenadas reales
+                return int(base_val)
 
     def _parse_coords(self, coord_str: str) -> Tuple[int, int]:
         """Convierte "x,y" en tupla (x, y) parseada."""
@@ -1131,10 +1141,12 @@ class RenderEngine:
                     # El editor envía 'width' si es un Textbox
                     box_width = int(el.get("width", 0))
                     if box_width > 0:
-                         # Ajustar ancho disponible restando padding horizontal si fuera necesario,
-                         # pero normalmente 'width' en editor incluye todo. 
-                         # Asumimos width del contenido para el wrap.
-                         wrap_width = s(box_width) # Escalar width
+                         wrap_width = box_width
+                         if self.canvas_w == CANVAS_W and self.canvas_h == CANVAS_H:
+                             try:
+                                 wrap_width = s(box_width)
+                             except Exception:
+                                 wrap_width = box_width
                          temp_content = self._wrap_text(temp_content, temp_font, wrap_width)
                     
                     # 2. Calcular Dimensiones del Texto (para fondo)
@@ -1177,7 +1189,13 @@ class RenderEngine:
                         # Si hay box_width fijo, ¿el fondo debe ocupar todo el ancho o solo el texto?
                         # En editor, Textbox tiene ancho fijo y fondo ocupa todo.
                         if box_width > 0:
-                            bg_w = s(box_width) # Usar ancho fijo si existe
+                            if self.canvas_w == CANVAS_W and self.canvas_h == CANVAS_H:
+                                try:
+                                    bg_w = s(box_width)
+                                except Exception:
+                                    bg_w = box_width
+                            else:
+                                bg_w = box_width
                         
                         bg_x = x - pl
                         bg_y = y - pt
