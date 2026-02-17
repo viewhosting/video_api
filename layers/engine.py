@@ -4,6 +4,7 @@ from typing import List, Dict, Any, Tuple, Optional, Union
 from PIL import Image, ImageDraw, ImageFont, ImageChops
 import numpy as np
 from moviepy.editor import ImageClip, CompositeVideoClip
+import moviepy.video.fx.all as vfx
 from config import CANVAS_W, CANVAS_H, s
 from graphics_utils import get_pil_font_path
 from utils import download_file
@@ -1290,12 +1291,106 @@ def process_dynamic_layers(layout_data: Dict[str, Any], duration: float, uploade
     block_keys = sorted([k for k in layout_data.keys() if k.startswith("bloque_")])
     
     for key in block_keys:
-        elements = layout_data[key]
-        if not isinstance(elements, list):
+        raw_elements = layout_data[key]
+        if not isinstance(raw_elements, list):
+            continue
+
+        meta = None
+        elements = []
+        for el in raw_elements:
+            if isinstance(el, dict) and el.get("tipo") == "bloque_meta":
+                meta = el
+            else:
+                elements.append(el)
+
+        if not elements:
             continue
             
         print(f"🎨 Renderizando bloque: {key} ({len(elements)} elementos)")
         clips = engine.process_block(elements, duration)
-        all_clips.extend(clips)
+        if not clips:
+            continue
+
+        inicio_val = None
+        fin_val = None
+        dur_val = None
+        efecto_inicio = ""
+        efecto_fin = ""
+
+        if isinstance(meta, dict):
+            inicio_val = meta.get("inicio")
+            fin_val = meta.get("fin")
+            dur_val = meta.get("duracion")
+            efecto_inicio = str(meta.get("efecto_inicio") or "").strip().lower()
+            efecto_fin = str(meta.get("efecto_fin") or "").strip().lower()
+
+        has_inicio = inicio_val not in (None, "", "null")
+        has_fin = fin_val not in (None, "", "null")
+        has_duracion = dur_val not in (None, "", "null")
+
+        block_start = 0.0
+        block_end = duration
+
+        if has_inicio or has_fin or has_duracion:
+            if has_inicio and has_fin:
+                try:
+                    block_start = float(inicio_val)
+                except:
+                    block_start = 0.0
+                try:
+                    block_end = float(fin_val)
+                except:
+                    block_end = duration
+                if block_end > duration:
+                    block_end = duration
+                if block_end <= block_start:
+                    block_end = block_start
+            elif has_duracion:
+                block_start = 0.0
+                try:
+                    d = float(dur_val)
+                except:
+                    d = duration
+                if d < 0:
+                    d = 0.0
+                if d > duration:
+                    d = duration
+                block_end = block_start + d
+                if block_end > duration:
+                    block_end = duration
+
+        block_duration = max(0.0, block_end - block_start)
+        if block_duration <= 0:
+            continue
+
+        fade_in = efecto_inicio == "fade"
+        fade_out = efecto_fin == "fade"
+        fx_duration = min(0.5, block_duration / 2.0)
+
+        for clip in clips:
+            c = clip
+            try:
+                if c.duration > block_duration:
+                    c = c.subclip(0, block_duration)
+                else:
+                    c = c.set_duration(block_duration)
+            except:
+                c = c.set_duration(block_duration)
+
+            if fade_in and fx_duration > 0:
+                try:
+                    c = vfx.fadein(c, fx_duration)
+                except:
+                    pass
+            if fade_out and fx_duration > 0:
+                try:
+                    c = vfx.fadeout(c, fx_duration)
+                except:
+                    pass
+
+            if block_start > 0:
+                c = c.set_start(block_start)
+
+            all_clips.extend([c])
             
     return all_clips

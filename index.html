@@ -582,6 +582,7 @@
         let renderModalHidden = false;
         let bgPreviewTimeSec = 0;
         let bgVideoLooping = false;
+        let blockConfigs = {};
 
         // --- INITIALIZATION ---
         window.onload = function() {
@@ -1129,6 +1130,37 @@
             addPropInput(container, 'Tipo', obj.elementType || obj.type, null, true);
             addPropInput(container, 'Block ID', obj.blockId, (v) => { obj.blockId = v; updateLayersList(); });
 
+            // 1.1 Configuración de Bloque (Tiempo / Efectos)
+            const blockId = obj.blockId || 'bloque_1';
+            if (!blockConfigs[blockId]) {
+                blockConfigs[blockId] = {
+                    inicio: '',
+                    fin: '',
+                    efecto_inicio: '',
+                    efecto_fin: '',
+                    duracion: ''
+                };
+            }
+            const cfg = blockConfigs[blockId];
+
+            addGroupHeader(container, `Bloque ${blockId} (Tiempo / Efectos)`);
+            addPropInput(container, 'Inicio (seg)', cfg.inicio, (v) => {
+                blockConfigs[blockId].inicio = v;
+            }, false, 'number');
+            addPropInput(container, 'Fin (seg)', cfg.fin, (v) => {
+                blockConfigs[blockId].fin = v;
+            }, false, 'number');
+            addPropInput(container, 'Duración (seg)', cfg.duracion, (v) => {
+                blockConfigs[blockId].duracion = v;
+            }, false, 'number');
+
+            addPropSelect(container, 'Efecto Inicio', cfg.efecto_inicio || '', ['', 'fade'], (v) => {
+                blockConfigs[blockId].efecto_inicio = v;
+            });
+            addPropSelect(container, 'Efecto Fin', cfg.efecto_fin || '', ['', 'fade'], (v) => {
+                blockConfigs[blockId].efecto_fin = v;
+            });
+
             if (obj.elementType === 'marquesina') {
                 updateMarquesinaOverlay(obj);
             }
@@ -1164,7 +1196,6 @@
             container.appendChild(marginRow);
 
             // 2.5 Relative Alignment
-            const blockId = obj.blockId || 'bloque_1';
             const objsInBlock = canvas.getObjects().filter(o => (o.blockId || 'bloque_1') === blockId && !o.isMarquesinaOverlay);
             const index = objsInBlock.indexOf(obj);
             
@@ -2126,9 +2157,17 @@
             Object.keys(fabricBlocks).forEach(bid => {
                 output.layout[bid] = [];
                 const groupObjs = fabricBlocks[bid];
-                
-                const refObj = groupObjs[0]; // First object is reference
-                
+                const refObj = groupObjs[0];
+
+                const cfg = blockConfigs[bid] || {};
+                const meta = { tipo: 'bloque_meta' };
+                if (cfg.inicio !== undefined && cfg.inicio !== '') meta.inicio = cfg.inicio;
+                if (cfg.fin !== undefined && cfg.fin !== '') meta.fin = cfg.fin;
+                if (cfg.efecto_inicio !== undefined && cfg.efecto_inicio !== '') meta.efecto_inicio = cfg.efecto_inicio;
+                if (cfg.efecto_fin !== undefined && cfg.efecto_fin !== '') meta.efecto_fin = cfg.efecto_fin;
+                if (cfg.duracion !== undefined && cfg.duracion !== '') meta.duracion = cfg.duracion;
+                output.layout[bid].push(meta);
+
                 groupObjs.forEach(obj => {
                     const schema = mapFabricToSchema(obj, refObj);
                     output.layout[bid].push(schema);
@@ -2372,10 +2411,31 @@
                 if (data.logo) document.getElementById('conf-logo').value = data.logo;
                 if (data.audio) document.getElementById('conf-audio').value = data.audio;
 
-                // Load Layout
+                blockConfigs = {};
+
                 if (data.layout) {
                     for (const [blockId, elements] of Object.entries(data.layout)) {
-                        elements.forEach(el => createObjectFromSchema(blockId, el));
+                        let meta = null;
+                        const arr = Array.isArray(elements) ? elements : [];
+                        const cleaned = [];
+
+                        arr.forEach(el => {
+                            if (el && el.tipo === 'bloque_meta') {
+                                meta = el;
+                            } else {
+                                cleaned.push(el);
+                            }
+                        });
+
+                        blockConfigs[blockId] = {
+                            inicio: meta && meta.inicio !== undefined ? meta.inicio : '',
+                            fin: meta && meta.fin !== undefined ? meta.fin : '',
+                            efecto_inicio: meta && meta.efecto_inicio !== undefined ? meta.efecto_inicio : '',
+                            efecto_fin: meta && meta.efecto_fin !== undefined ? meta.efecto_fin : '',
+                            duracion: meta && meta.duracion !== undefined ? meta.duracion : ''
+                        };
+
+                        cleaned.forEach(el => createObjectFromSchema(blockId, el));
                     }
                 }
                 
