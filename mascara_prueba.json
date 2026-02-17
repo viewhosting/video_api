@@ -1,0 +1,322 @@
+{
+    "json": true,
+    "nombre": "render_remoto.mp4",
+    "inicio": "0",
+    "fin": "5",
+    "ancho": 1024,
+    "alto": 820,
+    "zoom": 2, 
+    "video": "https://www.cdev.mx/input.mp4",
+    "logo": "https://www.cdev.mx/logo.png",
+    "audio": "",
+    "tipografia": [],
+    "layout": {
+        "bloque_1": [
+            {
+                "tipo": "rectangulo",
+                "posicion": "center, 20",
+                "size": "95%, 50",
+                "color": "#000000",
+                "transparencia": 0.1,
+                "radius": 40
+            },
+            {
+                "tipo": "texto",
+                "contenido": "098 702 484    099 724 117    092 689 695",
+                "posicion": "center, 8",
+                "tipografia": "roboto",
+                "peso": "extrabold",
+                "color": "#FFFFFF",
+                "size_texto": 30
+            }
+        ],
+        "bloque_2": [
+            {
+                "tipo": "imagen",
+                "contenido": "https://www.cdev.mx/logo.png",
+                "posicion": "10, 70",
+                "size": "100, 100",
+                "transparencia": 1.0,
+                "radius": 30,
+                "margin": "10,10"
+            }
+        ],
+        "bloque_3": [
+            {
+                "tipo": "texto",
+                "contenido": "REMATE",
+                "posicion": "79%, 35%",
+                "tipografia": "impact",
+                "peso": "extrabold",
+                "color": "#FFFFFF",
+                "size_texto": 40,
+                "borde_grosor": 3,
+                "borde_color": "#000000"
+            }
+        ],
+        "bloque_4": [
+            {
+                "tipo": "rectangulo",
+                "posicion": "76%, 44%",
+                "size": "170, 90",
+                "color": "#FFFB00",
+                "transparencia": 0,
+                "radius": "20, 20, 0, 20"
+            },
+            {
+                "tipo": "texto",
+                "contenido": "201",
+                "posicion": "center, -20",
+                "tipografia": "impact",
+                "peso": "extrabold",
+                "color": "#000000",
+                "size_texto": 85
+            }
+        ],
+        "bloque_5": [
+            {
+                "tipo": "rectangulo",
+                "posicion": "75%, 59%",
+                "size": "180, 100",
+                "color": "#FFFFFF",
+                "transparencia": 0,
+                "radius": "20, 20, 0, 0"
+            },
+            {
+                "tipo": "texto_dos_columnas",
+                "posicion": "15, 0",
+                "size": "170, 100",
+                "col1_size_texto": 90,
+                "col1_color": "#FFFB00",
+                "col1_tipografia": "impact",
+                "col1_contenido": "7",
+                "col1_borde_grosor": 4,
+                "col1_borde_color": "#000",
+                "col2_size_texto": 18,
+                "col2_color": "#000000",
+                "col2_tipografia": "montserrat",
+                "col2_contenido": "MIÉRCOLES</br>FEBRERO",
+                "col2_borde_grosor": 0,
+                "split_pct": 28,
+                "gap": 0,
+                "divisor": false,
+                "divisor_width": 2,
+                "col1_align": "left",
+                "col2_align": "left"
+            }
+        ],
+        "bloque_6": [
+            {
+                "tipo": "rectangulo",
+                "posicion": "0, 66.8%",
+                "size": "68%, 50",
+                "color": "#FFFB00",
+                "radius": "0, 20, 20, 0"
+            },
+            {
+                "tipo": "texto",
+                "contenido": "VAQUILLONAS DE 1 A 2 AÑOS",
+                "posicion": "260, 15",
+                "tipografia": "montserrat",
+                "peso": "bold",
+                "color": "#000000",
+                "size_texto":18
+            }
+        ],
+        "bloque_7": [
+            {
+                "tipo": "rectangulo",
+                "posicion": "0, 66.8%",
+                "size": "30%, 50",
+                "color": "#212120",
+                "radius": "0, 20, 20, 0"
+            },
+            {
+                "tipo": "texto_dos_columnas",
+                "posicion": "90, -25",
+                "size": "255, 100",
+                "col1_size_texto": 10,
+                "col1_color": "#FFFFFF",
+                "col1_tipografia": "montserrat",
+                "col1_contenido": "N0</br>Cert.",
+                "col2_size_texto": 30,
+                "col2_color": "#FFFFFF",
+                "col2_tipografia": "montserrat",
+                "col2_contenido": "201733",
+                "split_pct": 15,
+                "gap": 0,
+                "divisor": false,
+                "divisor_width": 2,
+                "col1_align": "left",
+                "col2_align": "left"
+            }
+        ],
+        "bloque_8": [
+            {
+                "tipo": "rectangulo",
+                "posicion": "0, 66.8%",
+                "size": "10%, 50",
+                "color": "#FFFB00",
+                "radius": "0, 20, 20, 0"
+            },
+            {
+                "tipo": "texto",
+                "contenido": "\uf6c8",
+                "posicion": "center, 8",
+                "tipografia": "FontAwesome",
+                "color": "#000000",
+                "size_texto": 30
+            }
+        ],
+        "bloque_9": [
+            {
+                "tipo": "rectangulo",
+                "posicion": "center, 75%",
+                "size": "95%, 50",
+                "color": "#000000",
+                "transparencia": 0.4,
+                "radius": "20, 20, 0, 0"
+            },
+            {
+                "tipo": "texto_varias_columnas",
+                "posicion": "center",
+                "size": "95%, 50",
+                "gap": 0,
+                "padding": "0",
+                "interlineado": 5,
+                "borde_grosor": 0,
+                "columnas": [
+                    {
+                        "contenido": "Cabezas", 
+                        "width": "20%",
+                        "alineacion": "center",
+                        "color": "#FFFFFF",
+                        "tipografia": "montserrat",
+                        "size_texto": 18,
+                        "peso": "bold"
+                    },
+                    {
+                        "contenido": "Peso", 
+                        "width": "20%",
+                        "alineacion": "center",
+                        "color": "#FFFFFF",
+                        "tipografia": "montserrat",
+                        "size_texto": 18,
+                        "peso": "bold"
+                    },
+                    {
+                        "contenido": "Clase", 
+                        "width": "20%",
+                        "alineacion": "center",
+                        "color": "#FFFFFF",
+                        "tipografia": "montserrat",
+                        "size_texto": 18,
+                        "peso": "bold"
+                    },
+                    {
+                        "contenido": "Estado", 
+                        "width": "20%",
+                        "alineacion": "center",
+                        "color": "#FFFFFF",
+                        "tipografia": "montserrat",
+                        "size_texto": 18,
+                        "peso": "bold"
+                    },
+                    {
+                        "contenido": "Departamento", 
+                        "width": "20%",
+                        "alineacion": "center",
+                        "color": "#FFFFFF",
+                        "tipografia": "montserrat",
+                        "size_texto": 18,
+                        "peso": "bold"
+                    }
+                ]
+            }
+            
+        ],
+        "bloque_10": [
+            {
+                "tipo": "rectangulo",
+                "posicion": "center, 83%",
+                "size": "95%, 50",
+                "color": "#000000",
+                "transparencia": 0.1,
+                "radius": 0
+            },
+            {
+                "tipo": "texto_varias_columnas",
+                "posicion": "center",
+                "size": "95%, 50",
+                "gap": 0,
+                "padding": "0",
+                "interlineado": 5,
+                "borde_grosor": 0,
+                "columnas": [
+                    {
+                        "contenido": "65", 
+                        "width": "20%",
+                        "alineacion": "center",
+                        "color": "#FFFFFF",
+                        "tipografia": "montserrat",
+                        "size_texto": 18,
+                        "peso": "extrabold"
+                    },
+                    {
+                        "contenido": "259", 
+                        "width": "20%",
+                        "alineacion": "center",
+                        "color": "#FFFFFF",
+                        "tipografia": "montserrat",
+                        "size_texto": 18,
+                        "peso": "extrabold"
+                    },
+                    {
+                        "contenido": "MB", 
+                        "width": "20%",
+                        "alineacion": "center",
+                        "color": "#FFFFFF",
+                        "tipografia": "montserrat",
+                        "size_texto": 18,
+                        "peso": "extrabold"
+                    },
+                    {
+                        "contenido": "B", 
+                        "width": "20%",
+                        "alineacion": "center",
+                        "color": "#FFFFFF",
+                        "tipografia": "montserrat",
+                        "size_texto": 18,
+                        "peso": "extrabold"
+                    },
+                    {
+                        "contenido": "PAYSANDÚ", 
+                        "width": "20%",
+                        "alineacion": "center",
+                        "color": "#FFFFFF",
+                        "tipografia": "montserrat",
+                        "size_texto": 18,
+                        "peso": "extrabold"
+                    }
+                ]
+            }
+        ],
+        "bloque_11": [
+            {
+                "tipo": "marquesina",
+                "contenido": "ESTE ES UN MENSAJE DE PRUEBA PARA LA MARQUESINA EN MOVIMIENTO",
+                "posicion": "center, 91%",
+                "size": "95%, 50",
+                "velocidad": 100,
+                "bg_color": "#000000",
+                "tipografia": "montserrat",
+                "peso": "bold",
+                "size_texto": 30,
+                "color": "#FFFFFF",
+                "transparencia": 0.2,
+                "padding": "0, 20, 0, 20", 
+                "radius": "0, 0, 20, 20"
+            }
+        ]
+    }
+}

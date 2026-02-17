@@ -1,12 +1,12 @@
 import os
 import math
-import requests
-from io import BytesIO
 from typing import List, Dict, Any, Tuple, Optional, Union
 from PIL import Image, ImageDraw, ImageFont, ImageChops
 import numpy as np
 from moviepy.editor import ImageClip, CompositeVideoClip
-from config import CANVAS_W, CANVAS_H, s, get_font, get_pil_font_path
+from config import CANVAS_W, CANVAS_H, s
+from graphics_utils import get_pil_font_path
+from utils import download_file
 
 class RenderEngine:
     def __init__(self, uploaded_fonts: Dict[str, str] = None, canvas_w=None, canvas_h=None):
@@ -808,7 +808,37 @@ class RenderEngine:
             # print(f"Error parsing radius: {e}")
             return 0, (True, True, True, True)
 
-    def _render_static_pil(self, elements: List[Dict[str, Any]], duration: float) -> Optional[ImageClip]:
+    def _wrap_text(self, text: str, font: Any, max_width: int) -> str:
+        """
+        Envuelve el texto automáticamente si excede max_width.
+        """
+        if max_width <= 0:
+            return text
+            
+        lines = []
+        for paragraph in text.split('\n'):
+            words = paragraph.split(' ')
+            current_line = []
+            current_width = 0
+            
+            for word in words:
+                # getlength retorna float
+                word_w = font.getlength(word + " ")
+                if current_width + word_w <= max_width:
+                    current_line.append(word)
+                    current_width += word_w
+                else:
+                    if current_line:
+                        lines.append(" ".join(current_line))
+                    current_line = [word]
+                    current_width = font.getlength(word + " ")
+            
+            if current_line:
+                lines.append(" ".join(current_line))
+                
+        return "\n".join(lines)
+
+    def _render_static_pil(self, elements: List[Dict], duration: float) -> Optional[ImageClip]:
         """Renderiza todos los elementos estáticos en una sola imagen PIL."""
         if not elements: return None
         
@@ -843,9 +873,24 @@ class RenderEngine:
                     try:
                         # Cargar imagen para saber tamaño
                         if content.startswith("http"):
-                             resp = requests.get(content, timeout=10)
-                             resp.raise_for_status()
-                             temp_img = Image.open(BytesIO(resp.content)).convert("RGBA")
+                             # Usamos download_file para robustez (fallback curl)
+                             try:
+                                 # Intentar deducir extensión
+                                 ext = ".png"
+                                 if "." in content.split("/")[-1]:
+                                     ext = os.path.splitext(content.split("/")[-1])[1]
+                                     if "?" in ext: ext = ext.split("?")[0]
+                                 
+                                 temp_path = download_file(content, suffix=ext)
+                                 temp_img = Image.open(temp_path).convert("RGBA")
+                                 temp_img.load() # Forzar carga en memoria
+                                 try:
+                                     os.remove(temp_path)
+                                 except:
+                                     pass
+                             except Exception as e:
+                                 print(f"⚠️ Error descargando imagen {content}: {e}")
+                                 continue
                         else:
                              if os.path.exists(content):
                                  temp_img = Image.open(content).convert("RGBA")
@@ -933,6 +978,10 @@ class RenderEngine:
                 # Eje X
                 if "center" in parts[0]:
                     x = cx + (cw - obj_w) // 2
+                elif "right" in parts[0]:
+                    x = cx + cw - obj_w
+                elif "left" in parts[0]:
+                    x = cx
                 else:
                     # Offset numérico
                     off_x = self._parse_value(parts[0], self.canvas_w)
@@ -943,6 +992,10 @@ class RenderEngine:
                 # Eje Y
                 if "center" in parts[1]:
                     y = cy + (ch - obj_h) // 2
+                elif "bottom" in parts[1]:
+                    y = cy + ch - obj_h
+                elif "top" in parts[1]:
+                    y = cy
                 else:
                     off_y = self._parse_value(parts[1], self.canvas_h)
                     y = cy + off_y
@@ -953,9 +1006,21 @@ class RenderEngine:
                 # Aplicar Margen
                 pos = self._apply_margin(pos, el)
                 
+                # Debug opcional de alineación
+                try:
+                    if os.environ.get("DEBUG_ALIGN", "").lower() in ["1", "true", "yes"]:
+                        print(f"[ALIGN] tipo={etype} pos_raw='{pos_str}' parts={parts} "
+                              f"context=(cx={cx},cy={cy},cw={cw},ch={ch}) "
+                              f"size=(w={obj_w},h={obj_h}) -> pos={pos}")
+                except:
+                    pass
+                
                 # Actualizar last_rect para el SIGUIENTE elemento
-                # last_rect es la bounding box final del elemento actual
-                last_rect = (pos[0], pos[1], obj_w, obj_h)
+                # MODIFICACIÓN: El usuario requiere que TODOS los elementos subsiguientes
+                # sean relativos al PRIMER elemento del bloque.
+                # Por lo tanto, solo establecemos last_rect la primera vez.
+                if last_rect is None:
+                    last_rect = (pos[0], pos[1], obj_w, obj_h)
                 
                 
                 # -----------------------------------------------------
@@ -964,12 +1029,13 @@ class RenderEngine:
                 
                 if etype in ["rectangulo", "cuadrado", "rect", "square"]:
                     # 1. Calcular dimensiones efectivas
-                    pt, pr, pb, pl = self._get_padding(el)
+                    # MOD: Ignoramos padding para la geometría del rectángulo
+                    # pt, pr, pb, pl = self._get_padding(el)
                     x1, y1 = pos
-                    x1 += pl
-                    y1 += pt
-                    w_eff = obj_w - (pl + pr)
-                    h_eff = obj_h - (pt + pb)
+                    # x1 += pl
+                    # y1 += pt
+                    w_eff = obj_w # - (pl + pr)
+                    h_eff = obj_h # - (pt + pb)
                     
                     if w_eff > 0 and h_eff > 0:
                         # 2. Calcular opacidad desde 'transparencia' (0.0 visible -> 1.0 invisible)
@@ -999,12 +1065,13 @@ class RenderEngine:
 
                 elif etype in ["circulo", "circle"]:
                     # 1. Calcular dimensiones efectivas
-                    pt, pr, pb, pl = self._get_padding(el)
+                    # MOD: Ignoramos padding para la geometría del círculo
+                    # pt, pr, pb, pl = self._get_padding(el)
                     x1, y1 = pos
-                    x1 += pl
-                    y1 += pt
-                    w_eff = obj_w - (pl + pr)
-                    h_eff = obj_h - (pt + pb)
+                    # x1 += pl
+                    # y1 += pt
+                    w_eff = obj_w
+                    h_eff = obj_h
                     
                     if w_eff > 0 and h_eff > 0:
                         # 2. Calcular opacidad
@@ -1056,16 +1123,89 @@ class RenderEngine:
                     x += pl
                     y += pt
                     
-                    # Nota: 'alineacion' (left/center/right) en texto de una sola línea
-                    # solía ajustar X. Pero con 'posicion: center' ya hemos centrado la caja.
-                    # Si el usuario usa 'posicion: center' Y 'alineacion: center', 
-                    # el comportamiento anterior restaba ancho/2.
-                    # Aquí asumimos que 'posicion' manda sobre la ubicación de la caja.
-                    # Sin embargo, mantenemos soporte legacy si NO se usó 'center' en posicion.
+                    # Nuevos parámetros: Interlineado y Tracking
+                    line_spacing = s(int(el.get("interlineado", el.get("line_spacing", 4))))
+                    tracking = s(int(el.get("espacio_letras", el.get("tracking", 0))))
                     
+                    # 1. Wrapping Automático (si hay width definido)
+                    # El editor envía 'width' si es un Textbox
+                    box_width = int(el.get("width", 0))
+                    if box_width > 0:
+                         # Ajustar ancho disponible restando padding horizontal si fuera necesario,
+                         # pero normalmente 'width' en editor incluye todo. 
+                         # Asumimos width del contenido para el wrap.
+                         wrap_width = s(box_width) # Escalar width
+                         temp_content = self._wrap_text(temp_content, temp_font, wrap_width)
+                    
+                    # 2. Calcular Dimensiones del Texto (para fondo)
+                    lines = temp_content.split('\n')
+                    
+                    # Altura
+                    try:
+                        ascent, descent = temp_font.getmetrics()
+                        base_h = ascent + descent
+                    except:
+                        bbox = temp_font.getbbox("Ay")
+                        base_h = bbox[3] - bbox[1] + 5
+                    
+                    total_text_h = (base_h * len(lines)) + (line_spacing * (len(lines) - 1))
+                    
+                    # Ancho Máximo (Real del texto, no el de la caja)
+                    max_text_w = 0
+                    for line in lines:
+                        if tracking == 0:
+                            w_line = temp_font.getlength(line)
+                        else:
+                            # Calculo aproximado con tracking
+                            w_line = sum([temp_font.getlength(c) for c in line]) + (len(line) - 1) * tracking
+                        if w_line > max_text_w:
+                            max_text_w = w_line
+                            
+                    # 3. Renderizar Fondo de Texto (si existe)
+                    bg_color = el.get("fondo_texto", el.get("backgroundColor", None))
+                    
+                    if bg_color:
+                        # Padding extra para el fondo (opcional, o usar el padding del elemento)
+                        # Usamos el padding del elemento (pt, pr, pb, pl) para "inflar" el fondo respecto al texto?
+                        # No, x,y ya tienen pl, pt sumados. 
+                        # Si el usuario pone padding, quiere que el texto esté dentro.
+                        # Entonces el fondo debe cubrir desde (x-pl, y-pt) hasta (x+w+pr, y+h+pb)
+                        
+                        bg_w = max_text_w + pl + pr
+                        bg_h = total_text_h + pt + pb
+                        
+                        # Si hay box_width fijo, ¿el fondo debe ocupar todo el ancho o solo el texto?
+                        # En editor, Textbox tiene ancho fijo y fondo ocupa todo.
+                        if box_width > 0:
+                            bg_w = s(box_width) # Usar ancho fijo si existe
+                        
+                        bg_x = x - pl
+                        bg_y = y - pt
+                        
+                        # Crear imagen de fondo
+                        bg_opacity = 1.0 # Default sólido
+                        if "bg_opacity" in el: bg_opacity = float(el["bg_opacity"])
+                        
+                        fill_img = self._create_fill_image((int(bg_w), int(bg_h)), bg_color, bg_opacity)
+                        
+                        # Radius del fondo
+                        radius_raw = el.get("radius", 0) # Custom prop 'radius' mapped to root
+                        radius, corners = self._parse_radius(radius_raw)
+                        
+                        if radius > 0:
+                            mask = Image.new("L", (int(bg_w), int(bg_h)), 0)
+                            draw_mask = ImageDraw.Draw(mask)
+                            draw_mask.rounded_rectangle((0, 0, int(bg_w), int(bg_h)), radius=radius, corners=corners, fill=255)
+                            fill_img.putalpha(ImageChops.multiply(fill_img.split()[3], mask))
+                        
+                        img.paste(fill_img, (int(bg_x), int(bg_y)), fill_img)
+
+                    # 4. Renderizar Texto
                     align = el.get("alineacion", "left").lower()
+                    
+                    # Ajuste de alineación heredado
                     if "center" not in parts[0] and align == "center":
-                        # Legacy: si posicion es numérica y align es center, centramos en el punto X
+                        # Legacy adjustment
                         x = x - (obj_w // 2)
                     elif "center" not in parts[0] and align == "right":
                         x = x - obj_w
@@ -1076,13 +1216,6 @@ class RenderEngine:
                     if stroke_width > 0:
                         stroke_fill = self._hex_to_rgb(el.get("borde_color", "#000000"))
                     
-                    # Nuevos parámetros: Interlineado y Tracking
-                    # 'interlineado' en px (extra space between lines)
-                    line_spacing = s(int(el.get("interlineado", el.get("line_spacing", 4))))
-                    # 'espacio_letras' en px (extra space between letters)
-                    # Mantenemos 'tracking' como alias legacy
-                    tracking = s(int(el.get("espacio_letras", el.get("tracking", 0))))
-
                     self._draw_text_advanced(
                         draw, (x, y), temp_content, temp_font, color, 
                         align=align, # pasamos align para que _draw_text_advanced lo maneje
