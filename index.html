@@ -6,44 +6,99 @@
     <title>Video Template Editor</title>
     <!-- Fabric.js -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.1/fabric.min.js"></script>
-    <!-- Google Fonts (Matching available fonts) -->
-    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@100;300;400;500;700;900&family=Montserrat:wght@100;300;400;500;600;700;800;900&family=Open+Sans:wght@300;400;500;600;700;800&family=Oswald&display=swap" rel="stylesheet">
+    <!-- Google Fonts UI -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Montserrat:wght@100;200;300;400;500;600;700;800;900&family=Roboto:wght@100;300;400;500;700;900&family=Open+Sans:wght@300;400;600;700;800&display=swap" rel="stylesheet">
     <!-- FontAwesome for UI Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
     <style>
         :root {
-            --bg-dark: #1e1e1e;
-            --bg-panel: #252526;
-            --bg-input: #3c3c3c;
-            --text-main: #cccccc;
+            --bg-dark: #0c0d10;
+            --bg-panel: #15171c;
+            --bg-input: #15171c;
+            --text-main: #e2e8f0;
             --text-highlight: #ffffff;
-            --accent: #007acc;
-            --accent-hover: #005f9e;
-            --border: #333333;
-            --danger: #d9534f;
+            --accent: #4f46e5;
+            --accent-hover: #6366f1;
+            --border: #262a33;
+            --danger: #ef4444;
         }
 
         * { box-sizing: border-box; }
 
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
             margin: 0;
             display: flex;
+            flex-direction: column;
             height: 100vh;
             background-color: var(--bg-dark);
             color: var(--text-main);
             overflow: hidden;
         }
 
+        .panel-bg { background-color: var(--bg-panel); }
+        .border-base { border-color: var(--border); }
+
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 4px;
+            height: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #15171c; }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #333741;
+            border-radius: 10px;
+        }
+
+        #layout-row {
+            flex: 1;
+            display: flex;
+            min-height: 0;
+        }
+
+        #top-header {
+            height: 48px;
+            background-color: var(--bg-panel);
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 16px;
+            z-index: 20;
+        }
+
+        #top-header-left {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        #top-header-title {
+            font-size: 0.8rem;
+            font-weight: 700;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            color: var(--text-highlight);
+        }
+
+        #top-header-subtitle {
+            font-size: 0.7rem;
+            color: #888;
+        }
+
+        #top-header-right {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 0.75rem;
+            color: #999;
+        }
+
         /* --- LAYOUT --- */
         #sidebar {
-            width: 260px;
-            background-color: var(--bg-panel);
-            border-right: 1px solid var(--border);
-            display: flex;
-            flex-direction: column;
-            z-index: 10;
+            display: none;
         }
 
         #main {
@@ -61,7 +116,16 @@
             display: flex;
             flex-direction: column;
             overflow-y: auto;
+            overflow-x: hidden;
             z-index: 10;
+            box-shadow: -10px 0 30px rgba(0,0,0,0.35);
+        }
+
+        #props-container {
+            margin-top: auto;
+            padding: 10px 12px 12px 12px;
+            border-top: 1px solid var(--border);
+            background-color: var(--bg-panel);
         }
 
         /* --- COMPONENTS --- */
@@ -116,11 +180,52 @@
             border-color: #555;
         }
 
+        .tool-btn.active {
+            background-color: #4f46e5;
+            color: #ffffff;
+            border-color: #4f46e5;
+        }
+
         .tool-btn.full-width {
             grid-column: span 2;
             flex-direction: row;
         }
         .tool-btn.full-width i { margin-bottom: 0; margin-right: 10px; }
+
+        /* Properties panel */
+        #props-container {
+            padding: 12px 14px 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            overflow-y: auto;
+            max-height: calc(100vh - 120px);
+        }
+
+        .prop-card {
+            background: rgba(15,23,42,0.85);
+            border-radius: 10px;
+            border: 1px solid #262a33;
+            box-shadow: 0 18px 40px rgba(0,0,0,0.6);
+            padding: 10px 12px 12px;
+        }
+
+        .prop-card-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-size: 0.6rem;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            color: #94a3b8;
+            margin-bottom: 8px;
+        }
+
+        .prop-card-body {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
 
         /* Layers List */
         #layers-list {
@@ -221,13 +326,9 @@
             justify-content: center;
             align-items: center;
             padding: 40px;
-            background-image: 
-                linear-gradient(45deg, #1a1a1a 25%, transparent 25%), 
-                linear-gradient(-45deg, #1a1a1a 25%, transparent 25%), 
-                linear-gradient(45deg, transparent 75%, #1a1a1a 75%), 
-                linear-gradient(-45deg, transparent 75%, #1a1a1a 75%);
-            background-size: 20px 20px;
-            background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
+            background-image: radial-gradient(#262a33 1px, transparent 1px);
+            background-size: 32px 32px;
+            background-color: #0c0d10;
         }
 
         .canvas-wrapper {
@@ -238,50 +339,149 @@
             background: #000;
         }
 
-        /* Properties Inputs */
-        .prop-group {
-            padding: 15px;
-            border-bottom: 1px solid var(--border);
+        #timeline {
+            height: auto;
+            background-color: var(--bg-panel);
+            border-top: 1px solid var(--border);
+            padding: 6px 12px 10px 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
         }
 
-        .prop-group h4 {
-            margin: 0 0 12px 0;
+        #timeline-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
             font-size: 0.75rem;
             color: #888;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
         }
 
-        .prop-row { margin-bottom: 12px; }
+        #timeline-header span {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        #timeline-track-wrapper {
+            flex: 1;
+            overflow-x: auto;
+            position: relative;
+        }
+
+        #timeline-track {
+            position: relative;
+            height: 30px;
+            min-width: 600px;
+            border-radius: 4px;
+            background-color: #181818;
+            border: 1px solid var(--border);
+        }
+
+        .timeline-block {
+            position: absolute;
+            top: 3px;
+            height: 24px;
+            border-radius: 4px;
+            background-image: linear-gradient(90deg, #4f46e5 0%, #6366f1 100%);
+            border: 1px solid rgba(255,255,255,0.25);
+            display: flex;
+            align-items: center;
+            padding: 0 6px;
+            font-size: 0.7rem;
+            color: #fff;
+            white-space: nowrap;
+        }
+
+        .timeline-block.inactive {
+            background-image: none;
+            background-color: #444;
+            border-color: rgba(255,255,255,0.15);
+            color: #ddd;
+        }
+
+        /* Properties Inputs */
+        .prop-row {
+            display: flex;
+            flex-direction: column;
+            margin-bottom: 6px;
+            font-size: 0.78rem;
+        }
         .prop-row:last-child { margin-bottom: 0; }
 
         .prop-row label {
             display: block;
-            font-size: 0.75rem;
-            margin-bottom: 5px;
-            color: #aaa;
+            margin-bottom: 4px;
+            color: #94a3b8;
+            font-size: 0.65rem;
+            text-transform: uppercase;
+            letter-spacing: 0.12em;
         }
 
-        .prop-input, select, textarea {
+        .prop-input,
+        .prop-row select,
+        .prop-row textarea {
             width: 100%;
-            padding: 8px;
-            background-color: var(--bg-input);
-            border: 1px solid var(--border);
-            border-radius: 3px;
-            color: var(--text-highlight);
+            padding: 7px 9px;
+            background-color: #020617;
+            border: 1px solid #262a33;
+            border-radius: 8px;
+            color: #e2e8f0;
             font-family: inherit;
-            font-size: 0.85rem;
+            font-size: 0.78rem;
+            outline: none;
+            box-shadow: inset 0 0 0 1px rgba(15,23,42,0.6), 0 8px 20px rgba(0,0,0,0.6);
         }
         
-        .prop-input:focus, select:focus, textarea:focus {
+        .prop-input:focus,
+        .prop-row select:focus,
+        .prop-row textarea:focus {
             outline: none;
             border-color: var(--accent);
+            box-shadow: 0 0 0 1px rgba(79,70,229,0.7), 0 10px 25px rgba(15,23,42,0.8);
         }
         
         input[type="color"] {
             height: 35px;
             padding: 2px;
             cursor: pointer;
+        }
+
+        .accordion-section {
+            border-bottom: 1px solid var(--border);
+        }
+
+        .accordion-header {
+            width: 100%;
+            padding: 10px 14px;
+            background-color: var(--bg-dark);
+            border: none;
+            border-bottom: 1px solid var(--border);
+            color: var(--text-highlight);
+            text-align: left;
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            cursor: pointer;
+        }
+
+        .accordion-header span {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .accordion-body {
+            display: none;
+            padding: 10px 12px 12px 12px;
+            background-color: #1b1b1b;
+        }
+
+        .accordion-body.open {
+            display: block;
         }
 
         /* Modal */
@@ -335,111 +535,172 @@
         }
 
     </style>
-</head>
-<body>
+    </head>
+    <body>
 
-    <!-- SIDEBAR -->
-    <div id="sidebar">
-        <div class="panel-header">
-            <span>Herramientas</span>
-            <i class="fas fa-toolbox"></i>
-        </div>
-        
-        <div class="tool-grid">
-            <button class="tool-btn full-width" onclick="addBlock()">
-                <i class="fas fa-box"></i> Nuevo Bloque
-            </button>
-            
-            <button class="tool-btn" onclick="addElement('texto')">
-                <i class="fas fa-font"></i> Texto
-            </button>
-            <button class="tool-btn" onclick="addElement('rectangulo')">
-                <i class="fas fa-square"></i> Rectángulo
-            </button>
-            
-            <button class="tool-btn" onclick="addElement('imagen')">
-                <i class="fas fa-image"></i> Imagen
-            </button>
-            <button class="tool-btn" onclick="addElement('marquesina')">
-                <i class="fas fa-scroll"></i> Marquesina
-            </button>
-            
-            <button class="tool-btn" onclick="addElement('texto_dos_columnas')">
-                <i class="fas fa-columns"></i> 2 Cols
-            </button>
-            <button class="tool-btn" onclick="addElement('texto_varias_columnas')">
-                <i class="fas fa-table"></i> N Cols
-            </button>
-        </div>
-
-        <div class="panel-header" style="margin-top: auto; border-top: 1px solid var(--border);">
-            <span>Capas / Bloques</span>
-            <i class="fas fa-layer-group"></i>
-        </div>
-        <div id="layers-list">
-            <!-- Dynamic list -->
-            <div style="padding:20px; text-align:center; color:#555; font-size:0.8rem;">
-                No hay elementos
+    <div id="top-header">
+        <div id="top-header-left">
+            <i class="fas fa-layer-group" style="color:#4f46e5;"></i>
+            <div>
+                <div id="top-header-title">Unik Marketing</div>
+                <div id="top-header-subtitle">Editor de mascara para video</div>
             </div>
+        </div>
+        <div id="top-header-right">
+            <span><i class="fas fa-film"></i> <span id="top-header-video-label">Sin video de fondo</span></span>
+            <span><i class="fas fa-cube"></i> <span id="top-header-block-label">Bloque activo: bloque_1</span></span>
         </div>
     </div>
 
-    <!-- MAIN AREA -->
+    <div id="layout-row">
+
     <div id="main">
-        <div id="toolbar">
-            <button class="btn btn-secondary" onclick="showSettingsModal()" title="Configuración Global">
-                <i class="fas fa-cog"></i>
-            </button>
-            <button class="btn btn-secondary" onclick="showJsonModal()">
-                <i class="fas fa-code"></i> JSON
-            </button>
-            <button class="btn" onclick="generateRemote()"></button>
-                <i class="fas fa-broadcast-tower"></i> GENERAR
-            </button>
-            
-            <div class="toolbar-input-group" style="flex: 1; max-width: 500px;">
-                <i class="fas fa-video" style="color: #888;"></i>
-                <input type="text" id="video-url-input" placeholder="URL Video de Fondo (mp4/webm)" onchange="updateBackgroundVideo()">
-                <button id="retry-video-btn" onclick="retryVideo()" title="Reintentar carga de video" style="display: none; background: none; border: none; color: #d9534f; cursor: pointer;">
-                    <i class="fas fa-redo"></i>
-                </button>
-                <button class="btn btn-secondary" style="margin-left: 8px; padding: 4px 8px; font-size: 0.75rem;" onclick="openVideoPreviewModal()" title="Elegir segundo de previsualización">
-                    <i class="fas fa-play-circle"></i>
-                </button>
-                <button id="bg-loop-btn" class="btn btn-secondary" style="margin-left: 4px; padding: 4px 8px; font-size: 0.75rem;" onclick="toggleBackgroundLoop()" title="Reproducir/pausar fondo en bucle">
-                    <i class="fas fa-redo-alt"></i>
-                </button>
-            </div>
-            
-            <div style="font-size: 0.85rem; color: #888;">
-                <i class="fas fa-ruler-combined"></i>
-                <span id="canvas-size-display">1024 x 820</span>
-            </div>
-            <button class="btn btn-secondary" style="padding: 4px 8px; font-size: 0.75rem;" onclick="updateCanvasSize()">
-                Resize
-            </button>
-        </div>
 
         <div id="canvas-container">
-            <div class="canvas-wrapper">
+            <div class="canvas-wrapper" id="canvas-wrapper">
                 <video id="bg-video-el" muted playsinline></video>
                 <canvas id="c"></canvas>
             </div>
         </div>
-    </div>
 
-    <!-- PROPERTIES PANEL -->
-    <div id="properties">
-        <div class="panel-header">
-            <span>Propiedades</span>
-            <i class="fas fa-sliders-h"></i>
-        </div>
-        <div id="props-container">
-            <div style="padding:40px 20px; color:#555; text-align:center">
-                <i class="fas fa-mouse-pointer" style="font-size: 2rem; margin-bottom: 10px;"></i>
-                <br>Selecciona un elemento para editar
+        <div id="timeline">
+            <div id="timeline-header">
+                <span id="timeline-duration-label">Duración estimada: 0s</span>
+                <span style="display:inline-flex; align-items:center; gap:10px;">
+                    <span style="display:inline-flex; align-items:center; gap:6px;">
+                        <i class="fas fa-ruler-combined"></i>
+                        <span id="canvas-size-display">1024 x 820</span>
+                    </span>
+                    <span style="display:inline-flex; align-items:center; gap:4px;">
+                        <span style="font-size:0.7rem; color:#888;">Zoom</span>
+                        <select id="workspace-zoom-select" class="prop-input" style="width:auto; padding:3px 6px; font-size:0.7rem;">
+                            <option value="0.25">25%</option>
+                            <option value="0.5">50%</option>
+                            <option value="0.75">75%</option>
+                            <option value="1" selected>100%</option>
+                            <option value="1.25">125%</option>
+                            <option value="1.5">150%</option>
+                            <option value="1.75">175%</option>
+                            <option value="2">200%</option>
+                        </select>
+                    </span>
+                </span>
             </div>
         </div>
+    </div>
+
+    <div id="properties" class="panel-bg border-base">
+        <div class="accordion-section" id="accordion-config-section">
+            <button class="accordion-header" data-accordion-target="accordion-config">
+                <span><i class="fas fa-sliders-h"></i> Configuración</span>
+                <i class="fas fa-chevron-down" style="font-size: 0.7rem;"></i>
+            </button>
+            <div class="accordion-body" id="accordion-config">
+                <div class="prop-row">
+                    <label>Video de Fondo</label>
+                    <div style="display:flex; align-items:center; gap:6px;">
+                        <i class="fas fa-video" style="color: #888;"></i>
+                        <input type="text" id="video-url-input" class="prop-input" placeholder="URL Video de Fondo (mp4/webm)" onchange="updateBackgroundVideo()">
+                        <button id="retry-video-btn" onclick="retryVideo()" title="Reintentar carga de video" style="display: none; background: none; border: none; color: #d9534f; cursor: pointer;">
+                            <i class="fas fa-redo"></i>
+                        </button>
+                    </div>
+                    <div style="display:flex; gap:6px; margin-top:6px;">
+                        <button class="btn btn-secondary" style="padding: 4px 8px; font-size: 0.75rem;" onclick="openVideoPreviewModal()" title="Elegir segundo de previsualización">
+                            <i class="fas fa-play-circle"></i>
+                        </button>
+                        <button id="bg-loop-btn" class="btn btn-secondary" style="padding: 4px 8px; font-size: 0.75rem;" onclick="toggleBackgroundLoop()" title="Reproducir/pausar fondo en bucle">
+                            <i class="fas fa-redo-alt"></i>
+                        </button>
+                        <button class="btn btn-secondary" style="padding: 4px 8px; font-size: 0.75rem; margin-left:auto;" onclick="updateCanvasSize()">
+                            Resize
+                        </button>
+                    </div>
+                </div>
+                <div style="margin-top:12px; display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                    <div class="prop-row">
+                        <label>Nombre Archivo Output</label>
+                        <input type="text" id="conf-nombre" class="prop-input" value="render_remoto.mp4">
+                    </div>
+                    <div class="prop-row">
+                        <label>Zoom (Post-Procesado)</label>
+                        <input type="number" id="conf-zoom" class="prop-input" value="1" step="0.1">
+                    </div>
+                    <div class="prop-row">
+                        <label>Inicio (seg)</label>
+                        <input type="text" id="conf-inicio" class="prop-input" value="0">
+                    </div>
+                    <div class="prop-row">
+                        <label>Fin (seg)</label>
+                        <input type="text" id="conf-fin" class="prop-input" value="5">
+                    </div>
+                    <div class="prop-row" style="grid-column: span 2;">
+                        <label>Logo URL</label>
+                        <input type="text" id="conf-logo" class="prop-input" placeholder="https://...">
+                    </div>
+                    <div class="prop-row" style="grid-column: span 2;">
+                        <label>Audio URL</label>
+                        <input type="text" id="conf-audio" class="prop-input" placeholder="https://... (Opcional)">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="accordion-section" id="accordion-tools-section">
+            <button class="accordion-header" data-accordion-target="accordion-tools">
+                <span><i class="fas fa-toolbox"></i> Herramientas</span>
+                <i class="fas fa-chevron-down" style="font-size: 0.7rem;"></i>
+            </button>
+            <div class="accordion-body open" id="accordion-tools">
+                <div class="tool-grid">
+                    <button class="tool-btn full-width" onclick="addBlock()">
+                        <i class="fas fa-box"></i> Nuevo Bloque
+                    </button>
+                    
+                    <button class="tool-btn" onclick="addElement('texto')">
+                        <i class="fas fa-font"></i> Texto
+                    </button>
+                    <button class="tool-btn" onclick="addElement('rectangulo')">
+                        <i class="fas fa-square"></i> Rectángulo
+                    </button>
+                    
+                    <button class="tool-btn" onclick="addElement('imagen')">
+                        <i class="fas fa-image"></i> Imagen
+                    </button>
+                    <button class="tool-btn" onclick="addElement('video')">
+                        <i class="fas fa-video"></i> Video
+                    </button>
+                    <button class="tool-btn" onclick="addElement('marquesina')">
+                        <i class="fas fa-scroll"></i> Marquesina
+                    </button>
+                    
+                    <button class="tool-btn" onclick="addElement('texto_dos_columnas')">
+                        <i class="fas fa-columns"></i> 2 Cols
+                    </button>
+                    <button class="tool-btn" onclick="addElement('texto_varias_columnas')">
+                        <i class="fas fa-table"></i> N Cols
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div class="accordion-section" id="accordion-layers-section">
+            <button class="accordion-header" data-accordion-target="accordion-layers">
+                <span><i class="fas fa-layer-group"></i> Capas / Bloques</span>
+                <i class="fas fa-chevron-down" style="font-size: 0.7rem;"></i>
+            </button>
+            <div class="accordion-body" id="accordion-layers">
+                <div id="layers-list" class="custom-scrollbar" style="max-height: 240px; overflow-y: auto;">
+                    <div style="padding:20px; text-align:center; color:#555; font-size:0.8rem;">
+                        No hay elementos
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="props-container"></div>
+    </div>
+
     </div>
 
     <!-- JSON MODAL -->
@@ -457,43 +718,7 @@
     </div>
 
     <!-- SETTINGS MODAL -->
-    <div id="settings-modal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.85); z-index: 1000; justify-content: center; align-items: center;">
-        <div class="modal-content" style="height: auto; max-height: 90%; overflow-y: auto;">
-            <div class="modal-header">
-                <h3>Configuración Global</h3>
-                <button class="btn btn-secondary" onclick="closeSettingsModal()"><i class="fas fa-times"></i></button>
-            </div>
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
-                <div class="prop-row">
-                    <label>Nombre Archivo Output</label>
-                    <input type="text" id="conf-nombre" class="prop-input" value="render_remoto.mp4">
-                </div>
-                <div class="prop-row">
-                    <label>Zoom (Post-Procesado)</label>
-                    <input type="number" id="conf-zoom" class="prop-input" value="1" step="0.1">
-                </div>
-                <div class="prop-row">
-                    <label>Inicio (seg)</label>
-                    <input type="text" id="conf-inicio" class="prop-input" value="0">
-                </div>
-                <div class="prop-row">
-                    <label>Fin (seg)</label>
-                    <input type="text" id="conf-fin" class="prop-input" value="5">
-                </div>
-                <div class="prop-row" style="grid-column: span 2;">
-                    <label>Logo URL</label>
-                    <input type="text" id="conf-logo" class="prop-input" placeholder="https://...">
-                </div>
-                <div class="prop-row" style="grid-column: span 2;">
-                    <label>Audio URL</label>
-                    <input type="text" id="conf-audio" class="prop-input" placeholder="https://... (Opcional)">
-                </div>
-            </div>
-            <div style="text-align: right; margin-top: 20px;">
-                <button class="btn" onclick="closeSettingsModal()">Guardar</button>
-            </div>
-        </div>
-    </div>
+    <div id="settings-modal" style="display: none;"></div>
 
     <!-- VIDEO PREVIEW MODAL -->
     <div id="video-preview-modal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.85); z-index: 1000; justify-content: center; align-items: center;">
@@ -531,8 +756,13 @@
             <div id="render-status" style="margin-bottom: 15px; color: #bbb;">Generando…</div>
             <div id="render-video-wrap" style="display: none;">
                 <video id="render-video" controls style="width: 100%; max-height: 60vh; background: #000;"></video>
-                <div style="margin-top: 10px; text-align: right;">
-                    <a id="render-video-link" href="#" target="_blank" style="color: #9cf; text-decoration: underline;">Abrir en nueva pestaña</a>
+                <div style="margin-top: 10px; display:flex; justify-content:flex-end; gap:8px;">
+                    <button id="render-video-download" class="btn" title="Descargar archivo de video">
+                        <i class="fas fa-download"></i> Descargar video
+                    </button>
+                    <a id="render-video-link" href="#" target="_blank" class="btn btn-secondary" style="text-decoration:none;">
+                        <i class="fas fa-external-link-alt"></i> Abrir en nueva pestaña
+                    </a>
                 </div>
             </div>
             <pre id="render-error" style="display: none; background: #111; color: #f88; border: 1px solid #333; padding: 15px; border-radius: 6px; max-height: 60vh; overflow: auto;"></pre>
@@ -583,9 +813,31 @@
         let bgPreviewTimeSec = 0;
         let bgVideoLooping = false;
         let blockConfigs = {};
+        let workspaceZoom = 1;
 
         // --- INITIALIZATION ---
         window.onload = function() {
+            function normalizeCssFamily(name) {
+                if (!name) return 'Arial';
+                const n = String(name).trim();
+                if (n.toLowerCase().startsWith('montserrat')) return 'Montserrat';
+                if (n.toLowerCase().startsWith('roboto')) return 'Roboto';
+                if (n.toLowerCase().startsWith('opensans') || n.toLowerCase().includes('open sans')) return 'Open Sans';
+                return n;
+            }
+            async function ensureFontLoaded(family, weight) {
+                const cssFamily = normalizeCssFamily(family);
+                const w = parseInt(weight) || (String(weight).toLowerCase() === 'bold' ? 700 : 400);
+                try {
+                    await document.fonts.load(`normal ${w} 16px "${cssFamily}"`);
+                    if (window.fabric && fabric.util && fabric.util.clearFabricFontCache) {
+                        fabric.util.clearFabricFontCache();
+                    }
+                } catch(e) {}
+            }
+            window.normalizeCssFamily = normalizeCssFamily;
+            window.ensureFontLoaded = ensureFontLoaded;
+
             canvas = new fabric.Canvas('c', {
                 width: 1020,
                 height: 816,
@@ -631,6 +883,32 @@
                     renderProperties(activeObject);
                 }
             });
+
+            const accordionHeaders = document.querySelectorAll('.accordion-header');
+            accordionHeaders.forEach(h => {
+                h.addEventListener('click', () => {
+                    const targetId = h.getAttribute('data-accordion-target');
+                    const body = document.getElementById(targetId);
+                    if (!body) return;
+                    const isOpen = body.classList.contains('open');
+                    document.querySelectorAll('.accordion-body').forEach(b => b.classList.remove('open'));
+                    if (!isOpen) {
+                        body.classList.add('open');
+                    }
+                });
+            });
+
+            const zoomSelect = document.getElementById('workspace-zoom-select');
+            if (zoomSelect) {
+                zoomSelect.addEventListener('change', (e) => {
+                    const val = parseFloat(e.target.value) || 1;
+                    setWorkspaceZoom(val);
+                });
+                const initial = parseFloat(zoomSelect.value) || 1;
+                setWorkspaceZoom(initial);
+            }
+
+            renderBottomActions(null);
             
             // Render loop for video
             fabric.util.requestAnimFrame(function render() {
@@ -671,6 +949,10 @@
                     videoEl.pause();
                     videoEl.removeAttribute('src');
                     videoEl.load();
+                }
+                const label = document.getElementById('top-header-video-label');
+                if (label) {
+                    label.innerText = 'Sin video de fondo';
                 }
                 return;
             }
@@ -716,6 +998,11 @@
             videoEl.crossOrigin = "anonymous";
             videoEl.src = url;
             videoEl.load();
+
+            const label = document.getElementById('top-header-video-label');
+            if (label) {
+                label.innerText = 'Video fondo: ' + url;
+            }
         }
 
         function retryVideo() {
@@ -825,6 +1112,43 @@
 
         // --- REMOTE RENDER (GENERAR) ---
         let lastRenderBlobUrl = null;
+        let currentRenderUrl = null;
+        function getSuggestedFilename() {
+            const name = document.getElementById('conf-nombre')?.value || 'render_remoto.mp4';
+            return name.endsWith('.mp4') ? name : (name + '.mp4');
+        }
+        function downloadRenderedVideo() {
+            const url = currentRenderUrl;
+            if (!url) return;
+            const filename = getSuggestedFilename();
+            // Si es blob local, descargar directo
+            if (url.startsWith('blob:')) {
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = filename;
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                return;
+            }
+            // Intentar fetch y descargar como blob (maneja CORS si el servidor lo permite)
+            fetch(url)
+                .then(r => r.blob())
+                .then(blob => {
+                    const blobUrl = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = blobUrl;
+                    a.download = filename;
+                    document.body.appendChild(a);
+                    a.click();
+                    a.remove();
+                    setTimeout(() => URL.revokeObjectURL(blobUrl), 2000);
+                })
+                .catch(() => {
+                    // Fallback: abrir en nueva pestaña (el usuario puede guardar desde allí)
+                    window.open(url, '_blank');
+                });
+        }
         function openRenderModalLoading() {
             const modal = document.getElementById('render-modal');
             const fab = document.getElementById('render-modal-toggle-fab');
@@ -843,11 +1167,16 @@
             const modal = document.getElementById('render-modal');
             const videoElOut = document.getElementById('render-video');
             const linkEl = document.getElementById('render-video-link');
+            const dlBtn = document.getElementById('render-video-download');
             document.getElementById('render-status').style.display = 'none';
             document.getElementById('render-error').style.display = 'none';
             document.getElementById('render-video-wrap').style.display = 'block';
             videoElOut.src = url;
             linkEl.href = url;
+            currentRenderUrl = url;
+            if (dlBtn) {
+                dlBtn.onclick = downloadRenderedVideo;
+            }
             if (!renderModalHidden) {
                 modal.style.display = 'flex';
             }
@@ -1019,6 +1348,24 @@
                     finalizeAdd(img, blockId, 'imagen', { contenido: url });
                 });
                 return;
+            } else if (type === 'video') {
+                const url = prompt("URL del video:", "https://www.cdev.mx/comercial.mp4");
+                if (!url) return;
+                obj = new fabric.Rect({
+                    left: center.left - 100,
+                    top: center.top - 56,
+                    width: 200,
+                    height: 112,
+                    fill: '#000000',
+                    stroke: '#ffffff',
+                    strokeDashArray: [6, 4]
+                });
+                obj.customProps = {
+                    contenido: url,
+                    radius: 30,
+                    padding: "10,10",
+                    margin: "10,10"
+                };
             } else if (type === 'texto_dos_columnas') {
                 // Simulation Group
                 const bg = new fabric.Rect({ width: 400, height: 60, fill: '#333', opacity: 0.5 });
@@ -1114,21 +1461,23 @@
         // --- PROPERTIES PANEL ---
 
         function renderProperties(obj) {
-            const container = document.getElementById('props-container');
-            container.innerHTML = '';
+            const root = document.getElementById('properties');
+            const placeholder = document.getElementById('props-container');
+
+            if (root) {
+                root.querySelectorAll('.accordion-section[data-prop-group="true"]').forEach(sec => sec.remove());
+            }
+
+            renderBottomActions(obj);
 
             if (!obj) {
-                container.innerHTML = `
-                    <div style="padding:40px 20px; color:#555; text-align:center">
-                        <i class="fas fa-mouse-pointer" style="font-size: 2rem; margin-bottom: 10px;"></i>
-                        <br>Selecciona un elemento
-                    </div>`;
                 return;
             }
 
-            // 1. General Info
-            addPropInput(container, 'Tipo', obj.elementType || obj.type, null, true);
-            addPropInput(container, 'Block ID', obj.blockId, (v) => { obj.blockId = v; updateLayersList(); });
+            // 1. General Info (Info)
+            const infoGroup = addGroupHeader(root, 'Info');
+            addPropInput(infoGroup, 'Tipo', obj.elementType || obj.type, null, true);
+            addPropInput(infoGroup, 'Block ID', obj.blockId, (v) => { obj.blockId = v; updateLayersList(); });
 
             // 1.1 Configuración de Bloque (Tiempo / Efectos)
             const blockId = obj.blockId || 'bloque_1';
@@ -1143,21 +1492,21 @@
             }
             const cfg = blockConfigs[blockId];
 
-            addGroupHeader(container, `Bloque ${blockId} (Tiempo / Efectos)`);
-            addPropInput(container, 'Inicio (seg)', cfg.inicio, (v) => {
+            const timeGroup = addGroupHeader(root, 'Tiempo / Efectos');
+            addPropInput(timeGroup, 'Inicio (seg)', cfg.inicio, (v) => {
                 blockConfigs[blockId].inicio = v;
             }, false, 'number');
-            addPropInput(container, 'Fin (seg)', cfg.fin, (v) => {
+            addPropInput(timeGroup, 'Fin (seg)', cfg.fin, (v) => {
                 blockConfigs[blockId].fin = v;
             }, false, 'number');
-            addPropInput(container, 'Duración (seg)', cfg.duracion, (v) => {
+            addPropInput(timeGroup, 'Duración (seg)', cfg.duracion, (v) => {
                 blockConfigs[blockId].duracion = v;
             }, false, 'number');
 
-            addPropSelect(container, 'Efecto Inicio', cfg.efecto_inicio || '', ['', 'fade'], (v) => {
+            addPropSelect(timeGroup, 'Efecto Inicio', cfg.efecto_inicio || '', ['', 'fade'], (v) => {
                 blockConfigs[blockId].efecto_inicio = v;
             });
-            addPropSelect(container, 'Efecto Fin', cfg.efecto_fin || '', ['', 'fade'], (v) => {
+            addPropSelect(timeGroup, 'Efecto Fin', cfg.efecto_fin || '', ['', 'fade'], (v) => {
                 blockConfigs[blockId].efecto_fin = v;
             });
 
@@ -1166,17 +1515,39 @@
             }
 
             // 2. Geometry
-            addGroupHeader(container, 'Geometría');
+            const geomGroup = addGroupHeader(root, 'Geometría');
             const geomGrid = document.createElement('div');
             geomGrid.style.display = 'grid';
             geomGrid.style.gridTemplateColumns = '1fr 1fr';
             geomGrid.style.gap = '10px';
-            container.appendChild(geomGrid);
+            geomGroup.appendChild(geomGrid);
 
             addPropInput(geomGrid, 'X', Math.round(obj.left), (v) => { obj.set('left', parseInt(v)); canvas.requestRenderAll(); });
             addPropInput(geomGrid, 'Y', Math.round(obj.top), (v) => { obj.set('top', parseInt(v)); canvas.requestRenderAll(); });
-            addPropInput(geomGrid, 'W', (obj.width * obj.scaleX).toFixed(0), (v) => { obj.scaleToWidth(parseInt(v)); canvas.requestRenderAll(); });
-            addPropInput(geomGrid, 'H', (obj.height * obj.scaleY).toFixed(0), (v) => { obj.scaleToHeight(parseInt(v)); canvas.requestRenderAll(); });
+            addPropInput(geomGrid, 'W', (obj.width * obj.scaleX).toFixed(0), (v) => { 
+                const newW = parseInt(v);
+                if (!isNaN(newW)) {
+                    obj.scaleToWidth(newW); 
+                    if ((obj.elementType === 'rectangulo' || obj.type === 'rect')) {
+                        if (!obj.customProps) obj.customProps = {};
+                        const hVal = Math.round(obj.height * obj.scaleY);
+                        obj.customProps.size = `${newW}, ${hVal}`;
+                    }
+                }
+                canvas.requestRenderAll(); 
+            });
+            addPropInput(geomGrid, 'H', (obj.height * obj.scaleY).toFixed(0), (v) => { 
+                const newH = parseInt(v);
+                if (!isNaN(newH)) {
+                    obj.scaleToHeight(newH); 
+                    if ((obj.elementType === 'rectangulo' || obj.type === 'rect')) {
+                        if (!obj.customProps) obj.customProps = {};
+                        const wVal = Math.round(obj.width * obj.scaleX);
+                        obj.customProps.size = `${wVal}, ${newH}`;
+                    }
+                }
+                canvas.requestRenderAll(); 
+            });
 
             // 2.1 Margin (X, Y) - disponible para todos los elementos
             const marginRow = document.createElement('div');
@@ -1193,7 +1564,7 @@
             };
             marginRow.appendChild(marginLbl);
             marginRow.appendChild(marginInput);
-            container.appendChild(marginRow);
+            geomGroup.appendChild(marginRow);
 
             // 2.5 Relative Alignment
             const objsInBlock = canvas.getObjects().filter(o => (o.blockId || 'bloque_1') === blockId && !o.isMarquesinaOverlay);
@@ -1204,16 +1575,15 @@
             const refObj = objsInBlock[0]; // Always relative to the first element
             const isFirstElement = (index === 0);
             
-            const alignTitle = isFirstElement ? "Alineación (Lienzo)" : "Alineación (vs 1er Elemento)";
-            addGroupHeader(container, alignTitle);
+            const alignGroup = addGroupHeader(root, 'Alineación');
             
             const rowX = document.createElement('div');
             rowX.style.display = 'flex';
             rowX.style.gap = '5px';
             rowX.style.marginBottom = '5px';
             
-            const btnStyle = "padding: 5px; background: #555; color: white; border: 1px solid #666; cursor: pointer; border-radius: 4px; flex: 1; font-size: 0.75rem;";
-            const activeStyle = "padding: 5px; background: #2ecc71; color: white; border: 1px solid #27ae60; cursor: pointer; border-radius: 4px; flex: 1; font-size: 0.75rem;";
+                    const btnStyle = "padding: 5px; background: #15171c; color: #e2e8f0; border: 1px solid #262a33; cursor: pointer; border-radius: 4px; flex: 1; font-size: 0.75rem;";
+                    const activeStyle = "padding: 5px; background: #4f46e5; color: #ffffff; border: 1px solid #6366f1; cursor: pointer; border-radius: 4px; flex: 1; font-size: 0.75rem;";
 
             if (isFirstElement) {
                 // --- FIRST ELEMENT ALIGNMENT (TO CANVAS) ---
@@ -1249,7 +1619,7 @@
                 rowX.appendChild(btnLeftCanvas);
                 rowX.appendChild(btnCenterX);
                 rowX.appendChild(btnRightCanvas);
-                container.appendChild(rowX);
+                alignGroup.appendChild(rowX);
 
                 // Eje Y: Arriba, Centro, Abajo
                 const rowYCanvas = document.createElement('div');
@@ -1288,11 +1658,11 @@
                 rowYCanvas.appendChild(btnTopCanvas);
                 rowYCanvas.appendChild(btnCenterY);
                 rowYCanvas.appendChild(btnBottomCanvas);
-                container.appendChild(rowYCanvas);
+                alignGroup.appendChild(rowYCanvas);
 
                 const btnMan = document.createElement('button');
                 btnMan.innerText = "Desvincular Alineación";
-                btnMan.style = "width: 100%; padding: 5px; background: #444; color: #aaa; border: 1px dashed #666; cursor: pointer; border-radius: 4px; font-size: 0.75rem;";
+                btnMan.style = "width: 100%; padding: 6px 8px; background: #020617; color: #94a3b8; border: 1px dashed #262a33; cursor: pointer; border-radius: 8px; font-size: 0.7rem;";
                 btnMan.onclick = () => {
                     if (obj.customProps) {
                         delete obj.customProps.alignX;
@@ -1300,7 +1670,7 @@
                     }
                     renderProperties(obj);
                 };
-                container.appendChild(btnMan);
+                alignGroup.appendChild(btnMan);
 
             } else {
                 // --- SUBSEQUENT ELEMENT ALIGNMENT (RELATIVE TO 1ST) ---
@@ -1342,7 +1712,7 @@
                 rowX.appendChild(btnLeft);
                 rowX.appendChild(btnCenterX);
                 rowX.appendChild(btnRight);
-                container.appendChild(rowX);
+                alignGroup.appendChild(rowX);
 
                 // --- Y Axis ---
                 const rowY = document.createElement('div');
@@ -1387,7 +1757,7 @@
                 rowY.appendChild(btnTop);
                 rowY.appendChild(btnCenterY);
                 rowY.appendChild(btnBottom);
-                container.appendChild(rowY);
+                alignGroup.appendChild(rowY);
                 
                 // Manual Reset
                 const btnMan = document.createElement('button');
@@ -1400,7 +1770,7 @@
                     }
                     renderProperties(obj);
                 };
-                container.appendChild(btnMan);
+                alignGroup.appendChild(btnMan);
             }
 
             function setAlign(obj, prop, val) {
@@ -1411,26 +1781,31 @@
             }
 
             // 3. Appearance
-            addGroupHeader(container, 'Apariencia');
-            addPropRange(container, 'Opacidad', obj.opacity, 0, 1, 0.1, (v) => { obj.set('opacity', parseFloat(v)); canvas.requestRenderAll(); });
-            
+            const appearanceGroup = addGroupHeader(root, 'Apariencia');
+            addPropRange(appearanceGroup, 'Opacidad', obj.opacity, 0, 1, 0.1, (v) => { obj.set('opacity', parseFloat(v)); canvas.requestRenderAll(); });
+
+            // 4. Propiedades específicas por tipo
+            const propsGroup = addGroupHeader(root, 'Propiedades');
+
             // Marquesina Specific
             if (obj.elementType === 'marquesina') {
-                addGroupHeader(container, 'Propiedades Marquesina');
+                const marqGroup = document.createElement('div');
+                marqGroup.className = 'prop-card-body';
+                propsGroup.appendChild(marqGroup);
                 
-                addPropInput(container, 'Velocidad (px/s)', (obj.customProps && obj.customProps.velocidad) || 100, (v) => {
+                addPropInput(marqGroup, 'Velocidad (px/s)', (obj.customProps && obj.customProps.velocidad) || 100, (v) => {
                      if (!obj.customProps) obj.customProps = {};
                      obj.customProps.velocidad = parseInt(v);
                      canvas.requestRenderAll();
                 });
                 
-                addPropColor(container, 'Color Fondo', (obj.customProps && obj.customProps.bg_color) || '', (v) => {
+                addPropColor(marqGroup, 'Color Fondo', (obj.customProps && obj.customProps.bg_color) || '', (v) => {
                      if (!obj.customProps) obj.customProps = {};
                      obj.customProps.bg_color = v;
                      canvas.requestRenderAll();
                 });
                 
-                addPropRange(container, 'Transparencia Fondo', (obj.customProps && obj.customProps.transparencia) || 0, 0, 1, 0.1, (v) => {
+                addPropRange(marqGroup, 'Transparencia Fondo', (obj.customProps && obj.customProps.transparencia) || 0, 0, 1, 0.1, (v) => {
                      if (!obj.customProps) obj.customProps = {};
                      obj.customProps.transparencia = parseFloat(v);
                      canvas.requestRenderAll();
@@ -1507,11 +1882,11 @@
                  
                  filaPM.appendChild(gridPM);
                  filaPM.appendChild(previewPM);
-                 container.appendChild(filaPM);
+                 marqGroup.appendChild(filaPM);
 
                  // Tamaño del contenedor (marquesina es un rectángulo)
                  const defaultSize = `${Math.round(obj.width)}, ${Math.round(obj.height)}`;
-                 addPropInput(container, 'Tamaño (W, H)', (obj.customProps && obj.customProps.size) || defaultSize, (v) => {
+                 addPropInput(marqGroup, 'Tamaño (W, H)', (obj.customProps && obj.customProps.size) || defaultSize, (v) => {
                      if (!obj.customProps) obj.customProps = {};
                      obj.customProps.size = v;
                      // Vista previa: ajustar ancho del textbox
@@ -1525,81 +1900,108 @@
 
                  // Margen del contenedor
                  // Radio por esquina del contenedor
-                 addPropInput(container, 'Radio (TL, TR, BR, BL)', (obj.customProps && obj.customProps.radius) || '0, 0, 0, 0', (v) => {
-                     if (!obj.customProps) obj.customProps = {};
-                     obj.customProps.radius = v;
-                 });
+                addPropInput(marqGroup, 'Radio (TL, TR, BR, BL)', (obj.customProps && obj.customProps.radius) || '0, 0, 0, 0', (v) => {
+                    if (!obj.customProps) obj.customProps = {};
+                    obj.customProps.radius = v;
+                });
+            } else if (obj.elementType === 'video') {
+                const videoGroup = document.createElement('div');
+                videoGroup.className = 'prop-card-body';
+                propsGroup.appendChild(videoGroup);
+
+                addPropInput(videoGroup, 'URL Video', (obj.customProps && obj.customProps.contenido) || '', (v) => {
+                    if (!obj.customProps) obj.customProps = {};
+                    obj.customProps.contenido = v;
+                });
+
+                const vidRadius = (obj.customProps && obj.customProps.radius) ? obj.customProps.radius : 0;
+                addPropInput(videoGroup, 'Redondeo Video', vidRadius, (v) => {
+                    if (!obj.customProps) obj.customProps = {};
+                    obj.customProps.radius = v;
+                });
+
+                const padVal = (obj.customProps && obj.customProps.padding) || '10,10';
+                addPropInput(videoGroup, 'Padding (X,Y)', padVal, (v) => {
+                    if (!obj.customProps) obj.customProps = {};
+                    obj.customProps.padding = v;
+                });
+
+                const marginValVideo = (obj.customProps && obj.customProps.margin) || '10,10';
+                addPropInput(videoGroup, 'Margin (X,Y)', marginValVideo, (v) => {
+                    if (!obj.customProps) obj.customProps = {};
+                    obj.customProps.margin = v;
+                });
             }
 
             // Texto Dos Columnas
             if (obj.elementType === 'texto_dos_columnas') {
-                addGroupHeader(container, 'Texto Dos Columnas');
+                const twoColGroup = addGroupHeader(root, 'Texto Dos Columnas');
                 if (!obj.customProps) obj.customProps = {};
 
-                addPropInput(container, 'Split %', obj.customProps.split_pct ?? 50, (v) => {
+                addPropInput(twoColGroup, 'Split %', obj.customProps.split_pct ?? 50, (v) => {
                     obj.customProps.split_pct = parseInt(v) || 50;
                 });
-                addPropInput(container, 'Gap', obj.customProps.gap ?? 0, (v) => {
+                addPropInput(twoColGroup, 'Gap', obj.customProps.gap ?? 0, (v) => {
                     obj.customProps.gap = parseInt(v) || 0;
                 });
-                addPropSelect(container, 'Divisor', (obj.customProps.divisor ? 'true' : 'false'), ['false','true'], (v) => {
+                addPropSelect(twoColGroup, 'Divisor', (obj.customProps.divisor ? 'true' : 'false'), ['false','true'], (v) => {
                     obj.customProps.divisor = (v === 'true');
                 });
-                addPropInput(container, 'Divisor Width', obj.customProps.divisor_width ?? 2, (v) => {
+                addPropInput(twoColGroup, 'Divisor Width', obj.customProps.divisor_width ?? 2, (v) => {
                     obj.customProps.divisor_width = parseInt(v) || 2;
                 });
 
                 // Columna 1
-                addGroupHeader(container, 'Columna 1');
-                addPropInput(container, 'Contenido', obj.customProps.col1_contenido || '', (v) => {
+                const col1Group = addGroupHeader(root, 'Columna 1');
+                addPropInput(col1Group, 'Contenido', obj.customProps.col1_contenido || '', (v) => {
                     obj.customProps.col1_contenido = v;
                 }, false, 'textarea');
-                addPropSelect(container, 'Alineación', obj.customProps.col1_align || 'left', ['left','center','right'], (v) => {
+                addPropSelect(col1Group, 'Alineación', obj.customProps.col1_align || 'left', ['left','center','right'], (v) => {
                     obj.customProps.col1_align = v;
                 });
-                addPropInput(container, 'Tamaño Texto', obj.customProps.col1_size_texto ?? 24, (v) => {
+                addPropInput(col1Group, 'Tamaño Texto', obj.customProps.col1_size_texto ?? 24, (v) => {
                     obj.customProps.col1_size_texto = parseInt(v) || 24;
                 });
-                addPropColor(container, 'Color', obj.customProps.col1_color || '#FFFFFF', (v) => {
+                addPropColor(col1Group, 'Color', obj.customProps.col1_color || '#FFFFFF', (v) => {
                     obj.customProps.col1_color = v;
                 });
-                addPropSelect(container, 'Tipografía', obj.customProps.col1_tipografia || 'montserrat', AVAILABLE_FONTS, (v) => {
+                addPropSelect(col1Group, 'Tipografía', obj.customProps.col1_tipografia || 'montserrat', AVAILABLE_FONTS, (v) => {
                     obj.customProps.col1_tipografia = v;
                 });
-                addPropSelect(container, 'Peso', obj.customProps.col1_peso || 'bold', ['thin','bold','extrabold'], (v) => {
+                addPropSelect(col1Group, 'Peso', obj.customProps.col1_peso || 'bold', ['thin','bold','extrabold'], (v) => {
                     obj.customProps.col1_peso = v;
                 });
-                addPropInput(container, 'Borde Grosor', obj.customProps.col1_borde_grosor ?? 0, (v) => {
+                addPropInput(col1Group, 'Borde Grosor', obj.customProps.col1_borde_grosor ?? 0, (v) => {
                     obj.customProps.col1_borde_grosor = parseInt(v) || 0;
                 });
-                addPropColor(container, 'Borde Color', obj.customProps.col1_borde_color || '#000000', (v) => {
+                addPropColor(col1Group, 'Borde Color', obj.customProps.col1_borde_color || '#000000', (v) => {
                     obj.customProps.col1_borde_color = v;
                 });
 
                 // Columna 2
-                addGroupHeader(container, 'Columna 2');
-                addPropInput(container, 'Contenido', obj.customProps.col2_contenido || '', (v) => {
+                const col2Group = addGroupHeader(root, 'Columna 2');
+                addPropInput(col2Group, 'Contenido', obj.customProps.col2_contenido || '', (v) => {
                     obj.customProps.col2_contenido = v;
                 }, false, 'textarea');
-                addPropSelect(container, 'Alineación', obj.customProps.col2_align || 'left', ['left','center','right'], (v) => {
+                addPropSelect(col2Group, 'Alineación', obj.customProps.col2_align || 'left', ['left','center','right'], (v) => {
                     obj.customProps.col2_align = v;
                 });
-                addPropInput(container, 'Tamaño Texto', obj.customProps.col2_size_texto ?? 18, (v) => {
+                addPropInput(col2Group, 'Tamaño Texto', obj.customProps.col2_size_texto ?? 18, (v) => {
                     obj.customProps.col2_size_texto = parseInt(v) || 18;
                 });
-                addPropColor(container, 'Color', obj.customProps.col2_color || '#FFFFFF', (v) => {
+                addPropColor(col2Group, 'Color', obj.customProps.col2_color || '#FFFFFF', (v) => {
                     obj.customProps.col2_color = v;
                 });
-                addPropSelect(container, 'Tipografía', obj.customProps.col2_tipografia || 'montserrat', AVAILABLE_FONTS, (v) => {
+                addPropSelect(col2Group, 'Tipografía', obj.customProps.col2_tipografia || 'montserrat', AVAILABLE_FONTS, (v) => {
                     obj.customProps.col2_tipografia = v;
                 });
-                addPropSelect(container, 'Peso', obj.customProps.col2_peso || 'bold', ['thin','bold','extrabold'], (v) => {
+                addPropSelect(col2Group, 'Peso', obj.customProps.col2_peso || 'bold', ['thin','bold','extrabold'], (v) => {
                     obj.customProps.col2_peso = v;
                 });
-                addPropInput(container, 'Borde Grosor', obj.customProps.col2_borde_grosor ?? 0, (v) => {
+                addPropInput(col2Group, 'Borde Grosor', obj.customProps.col2_borde_grosor ?? 0, (v) => {
                     obj.customProps.col2_borde_grosor = parseInt(v) || 0;
                 });
-                addPropColor(container, 'Borde Color', obj.customProps.col2_borde_color || '#000000', (v) => {
+                addPropColor(col2Group, 'Borde Color', obj.customProps.col2_borde_color || '#000000', (v) => {
                     obj.customProps.col2_borde_color = v;
                 });
             }
@@ -1608,7 +2010,7 @@
             if (obj.type === 'rect') {
                 const currentRadius = (obj.customProps && obj.customProps.radius) ? obj.customProps.radius : (obj.rx || 0);
                 
-                addPropInput(container, 'Redondeo (TL, TR, BR, BL)', currentRadius, (v) => {
+                addPropInput(appearanceGroup, 'Redondeo (TL, TR, BR, BL)', currentRadius, (v) => {
                     if (!obj.customProps) obj.customProps = {};
                     obj.customProps.radius = v;
                     
@@ -1622,21 +2024,145 @@
             } else if (obj.type === 'image') {
                 // Redondeo para Imagen (solo se guarda en customProps.radius)
                 const imgRadius = (obj.customProps && obj.customProps.radius) ? obj.customProps.radius : 0;
-                addPropInput(container, 'Redondeo Imagen', imgRadius, (v) => {
+                addPropInput(appearanceGroup, 'Redondeo Imagen', imgRadius, (v) => {
                     if (!obj.customProps) obj.customProps = {};
                     obj.customProps.radius = v;
                 });
             }
 
-            if (obj.type === 'rect' || obj.type === 'textbox' || obj.type === 'text') {
-                 addPropColor(container, 'Color Relleno', obj.fill, (v) => { obj.set('fill', v); canvas.requestRenderAll(); });
+            if (obj.type === 'rect') {
+                const rectGroup = addGroupHeader(root, 'Fondo Rectángulo');
+                const body = document.createElement('div');
+                body.className = 'prop-card-body';
+                rectGroup.appendChild(body);
+
+                const currentColorProp = (obj.customProps && obj.customProps.color) || obj.fill || '#000000';
+                const isGradient = typeof currentColorProp === 'object' && currentColorProp && (currentColorProp.tipo === 'linear' || currentColorProp.tipo === 'lineal');
+
+                function hexToRgbA(h) {
+                    if (!h || typeof h !== 'string') return { color: '#000000', opacity: 1 };
+                    let hex = h.replace('#', '').trim();
+                    if (hex.length === 3) hex = hex.split('').map(c => c + c).join('');
+                    let a = 255;
+                    if (hex.length === 8) {
+                        a = parseInt(hex.slice(6, 8), 16);
+                        hex = hex.slice(0, 6);
+                    }
+                    const r = parseInt(hex.slice(0, 2), 16);
+                    const g = parseInt(hex.slice(2, 4), 16);
+                    const b = parseInt(hex.slice(4, 6), 16);
+                    const opacity = Math.max(0, Math.min(1, a / 255));
+                    const color = '#' + hex.toUpperCase();
+                    return { color, opacity, r, g, b };
+                }
+
+                function buildGradient(obj, gdef) {
+                    const c1 = gdef.colores[0] || '#FFFFFFFF';
+                    const c2 = gdef.colores[1] || '#FFFFFF00';
+                    const angleDeg = gdef.angulo || 0;
+                    let mid = gdef.punto_medio;
+                    if (mid === undefined || mid === null || isNaN(parseFloat(mid))) {
+                        mid = 100;
+                    }
+                    mid = parseFloat(mid);
+                    if (mid > 1) mid = mid / 100;
+                    if (mid < 0) mid = 0;
+                    if (mid > 1) mid = 1;
+
+                    const a = (parseFloat(angleDeg) || 0) * Math.PI / 180;
+                    const vx = Math.cos(a), vy = Math.sin(a);
+                    const cx = 0.5, cy = 0.5;
+                    function tToEdge(px, pv) {
+                        if (pv > 0) return (1 - px) / pv;
+                        if (pv < 0) return (0 - px) / pv;
+                        return Infinity;
+                    }
+                    const tPos = Math.min(tToEdge(cx, vx), tToEdge(cy, vy));
+                    const tNeg = Math.min(tToEdge(1 - cx, -vx), tToEdge(1 - cy, -vy));
+                    const x1 = cx - vx * tNeg;
+                    const y1 = cy - vy * tNeg;
+                    const x2 = cx + vx * tPos;
+                    const y2 = cy + vy * tPos;
+
+                    const s1 = hexToRgbA(c1);
+                    const s2 = hexToRgbA(c2);
+                    const midOffset = Math.max(0, Math.min(1, mid));
+                    const gradient = new fabric.Gradient({
+                        type: 'linear',
+                        gradientUnits: 'percentage',
+                        coords: { x1, y1, x2, y2 },
+                        colorStops: [
+                            { offset: 0, color: s1.color, opacity: s1.opacity },
+                            { offset: midOffset, color: s1.color, opacity: s1.opacity },
+                            { offset: 1, color: s2.color, opacity: s2.opacity }
+                        ]
+                    });
+                    obj.set('fill', gradient);
+                    canvas.requestRenderAll();
+                }
+
+                const mode = isGradient ? 'degradado' : 'solido';
+                addPropSelect(body, 'Modo Fondo', mode, ['solido', 'degradado'], (v) => {
+                    if (!obj.customProps) obj.customProps = {};
+                    if (v === 'solido') {
+                        const solid = (obj.customProps && obj.customProps.color && typeof obj.customProps.color === 'string') ? obj.customProps.color : '#000000';
+                        obj.customProps.color = solid;
+                        obj.set('fill', solid);
+                        canvas.requestRenderAll();
+                        renderProperties(obj);
+                    } else {
+                        const g = (obj.customProps && typeof obj.customProps.color === 'object') ? obj.customProps.color : { tipo: 'linear', colores: ['#FFFFFFFF', '#FFFFFF00'], angulo: 0, punto_medio: 100 };
+                        obj.customProps.color = g;
+                        buildGradient(obj, g);
+                        renderProperties(obj);
+                    }
+                });
+
+                if (!obj.customProps) obj.customProps = {};
+                if (typeof obj.customProps.color === 'undefined') {
+                    obj.customProps.color = isGradient ? currentColorProp : (typeof currentColorProp === 'string' ? currentColorProp : '#000000');
+                }
+
+                const isGradNow = typeof obj.customProps.color === 'object' && obj.customProps.color && (obj.customProps.color.tipo === 'linear' || obj.customProps.color.tipo === 'lineal');
+                if (isGradNow) {
+                    const g = obj.customProps.color;
+                    addPropColor(body, 'Color 1', g.colores[0] || '#FFFFFFFF', (v) => {
+                        obj.customProps.color.colores[0] = v;
+                        buildGradient(obj, obj.customProps.color);
+                    });
+                    addPropColor(body, 'Color 2', g.colores[1] || '#FFFFFF00', (v) => {
+                        obj.customProps.color.colores[1] = v;
+                        buildGradient(obj, obj.customProps.color);
+                    });
+                    addPropInput(body, 'Ángulo (°)', g.angulo || 0, (v) => {
+                        const ang = parseFloat(v) || 0;
+                        obj.customProps.color.angulo = ang;
+                        buildGradient(obj, obj.customProps.color);
+                    });
+                    addPropRange(body, 'Punto medio (%)', g.punto_medio != null ? g.punto_medio : 100, 0, 100, 1, (v) => {
+                        if (!obj.customProps) obj.customProps = {};
+                        const num = parseFloat(v);
+                        obj.customProps.color.punto_medio = isNaN(num) ? 100 : num;
+                        buildGradient(obj, obj.customProps.color);
+                    });
+                    // Aplicar preview si aún no se ha aplicado
+                    buildGradient(obj, g);
+                } else {
+                    addPropColor(body, 'Color Relleno', (typeof obj.customProps.color === 'string' ? obj.customProps.color : (obj.fill || '#000000')), (v) => {
+                        obj.customProps.color = v;
+                        obj.set('fill', v);
+                        canvas.requestRenderAll();
+                    });
+                }
+            } else if (obj.type === 'textbox' || obj.type === 'text') {
+                 addPropColor(appearanceGroup, 'Color Relleno', obj.fill, (v) => { obj.set('fill', v); canvas.requestRenderAll(); });
             }
             
             if ((obj.type === 'textbox' || obj.type === 'text') && obj.elementType !== 'marquesina' && obj.elementType !== 'texto_varias_columnas') {
-                 addPropColor(container, 'Fondo Texto', obj.backgroundColor || '', (v) => { obj.set('backgroundColor', v); canvas.requestRenderAll(); });
+                 addPropColor(appearanceGroup, 'Fondo Texto', obj.backgroundColor || '', (v) => { obj.set('backgroundColor', v); canvas.requestRenderAll(); });
                  
                  // Text Box Radius (Custom Prop for Backend)
-                 addPropInput(container, 'Redondeo Fondo', (obj.customProps && obj.customProps.radius) || 0, (v) => {
+                 addPropInput(appearanceGroup, 'Redondeo Fondo', (obj.customProps && obj.customProps.radius) || 0, (v) => {
                      if (!obj.customProps) obj.customProps = {};
                      obj.customProps.radius = parseInt(v);
                  });
@@ -1646,12 +2172,14 @@
             if (obj.type === 'textbox' || obj.type === 'text') {
                 // Caso especial: N Cols
                 if (obj.elementType === 'texto_varias_columnas') {
-                    addGroupHeader(container, 'Texto (N Cols)');
+                    const ncolTextGroup = document.createElement('div');
+                    ncolTextGroup.className = 'prop-card-body';
+                    propsGroup.appendChild(ncolTextGroup);
                     
                     if (!obj.customProps) obj.customProps = {};
                     
                     const interVal = (obj.customProps && obj.customProps.interlineado) || 5;
-                    addPropInput(container, 'Interlineado', interVal, (v) => {
+                    addPropInput(ncolTextGroup, 'Interlineado', interVal, (v) => {
                         if (!obj.customProps) obj.customProps = {};
                         const num = parseFloat(v) || 0;
                         obj.customProps.interlineado = num;
@@ -1660,19 +2188,19 @@
                     });
 
                     const gapVal = (obj.customProps && obj.customProps.gap) || 0;
-                    addPropInput(container, 'Gap Columnas', gapVal, (v) => {
+                    addPropInput(ncolTextGroup, 'Gap Columnas', gapVal, (v) => {
                         if (!obj.customProps) obj.customProps = {};
                         obj.customProps.gap = parseInt(v) || 0;
                     });
 
                     const padVal = (obj.customProps && obj.customProps.padding) || '0';
-                    addPropInput(container, 'Padding (T,R,B,L)', padVal, (v) => {
+                    addPropInput(ncolTextGroup, 'Padding (T,R,B,L)', padVal, (v) => {
                         if (!obj.customProps) obj.customProps = {};
                         obj.customProps.padding = v;
                     });
 
                     const defaultSize = `${Math.round(obj.width)}, ${Math.round(obj.height)}`;
-                    addPropInput(container, 'Tamaño (W, H)', (obj.customProps && obj.customProps.size) || defaultSize, (v) => {
+                    addPropInput(ncolTextGroup, 'Tamaño (W, H)', (obj.customProps && obj.customProps.size) || defaultSize, (v) => {
                         if (!obj.customProps) obj.customProps = {};
                         obj.customProps.size = v;
                         const parts = String(v).split(',');
@@ -1684,12 +2212,14 @@
                     });
 
                     const bordeVal = (obj.customProps && obj.customProps.borde_grosor) || 0;
-                    addPropInput(container, 'Borde Grosor', bordeVal, (v) => {
+                    addPropInput(ncolTextGroup, 'Borde Grosor', bordeVal, (v) => {
                         if (!obj.customProps) obj.customProps = {};
                         obj.customProps.borde_grosor = parseInt(v) || 0;
                     });
 
-                    addGroupHeader(container, 'Columnas (N Cols)');
+                    const ncolColsGroup = document.createElement('div');
+                    ncolColsGroup.className = 'prop-card-body';
+                    propsGroup.appendChild(ncolColsGroup);
                     
                     if (!Array.isArray(obj.customProps.columnas)) {
                         obj.customProps.columnas = [];
@@ -1700,15 +2230,16 @@
                     colsContainer.style.display = 'flex';
                     colsContainer.style.flexDirection = 'column';
                     colsContainer.style.gap = '8px';
-                    container.appendChild(colsContainer);
+                    ncolColsGroup.appendChild(colsContainer);
 
                     cols.forEach((col, idx) => {
                         if (!col) col = {};
                         const card = document.createElement('div');
-                        card.style.border = '1px solid #444';
-                        card.style.borderRadius = '4px';
-                        card.style.padding = '8px';
-                        card.style.background = '#1b1b1b';
+                        card.style.border = '1px solid #262a33';
+                        card.style.borderRadius = '10px';
+                        card.style.padding = '8px 10px 10px';
+                        card.style.background = '#020617';
+                        card.style.boxShadow = '0 14px 30px rgba(0,0,0,0.7)';
 
                         const headerRow = document.createElement('div');
                         headerRow.style.display = 'flex';
@@ -1717,13 +2248,15 @@
                         headerRow.style.marginBottom = '6px';
 
                         const title = document.createElement('div');
-                        title.style.fontSize = '0.8rem';
-                        title.style.color = '#ccc';
+                        title.style.fontSize = '0.7rem';
+                        title.style.color = '#94a3b8';
+                        title.style.textTransform = 'uppercase';
+                        title.style.letterSpacing = '0.12em';
                         title.innerText = `Columna ${idx + 1}`;
 
                         const delBtn = document.createElement('button');
                         delBtn.innerText = 'Eliminar';
-                        delBtn.style = 'padding: 2px 6px; font-size: 0.7rem; background:#552222; color:#f88; border:1px solid #aa4444; border-radius:3px; cursor:pointer;';
+                        delBtn.style = 'padding: 3px 8px; font-size: 0.65rem; background:#111827; color:#fca5a5; border:1px solid #ef4444; border-radius:999px; cursor:pointer;';
                         delBtn.onclick = () => {
                             cols.splice(idx, 1);
                             renderProperties(obj);
@@ -1762,13 +2295,25 @@
                         addPropSelect(grid, 'Peso', col.peso || 'bold', ['thin','light','regular','medium','bold','extrabold','black'], (v) => {
                             col.peso = v;
                         });
-
+                        
+                        addPropInput(grid, 'Borde Grosor', col.borde_grosor != null ? col.borde_grosor : 0, (v) => {
+                            col.borde_grosor = parseInt(v) || 0;
+                        });
+                        
+                        addPropColor(grid, 'Color Borde', col.borde_color || '#FFFFFF', (v) => {
+                            col.borde_color = v;
+                        });
+                        
                         addPropColor(card, 'Color Fondo', col.bg_color || '', (v) => {
                             col.bg_color = v;
                         });
 
                         addPropRange(card, 'Transparencia Fondo', col.bg_transparencia != null ? col.bg_transparencia : 0, 0, 1, 0.05, (v) => {
                             col.bg_transparencia = parseFloat(v) || 0;
+                        });
+
+                        addPropInput(card, 'Radius', col.radius || '', (v) => {
+                            col.radius = v;
                         });
 
                         addPropInput(card, 'Texto', col.contenido || '', (v) => {
@@ -1779,7 +2324,7 @@
                     });
 
                     const addBtn = document.createElement('button');
-                    addBtn.className = 'btn btn-secondary';
+                    addBtn.className = 'btn';
                     addBtn.style.marginTop = '8px';
                     addBtn.style.width = '100%';
                     addBtn.innerText = 'Agregar Columna';
@@ -1795,11 +2340,10 @@
                         });
                         renderProperties(obj);
                     };
-                    container.appendChild(addBtn);
+                    propsGroup.appendChild(addBtn);
                 } else {
                     // Texto normal / marquesina
-                    addGroupHeader(container, 'Texto');
-                    addPropInput(container, 'Contenido', obj.text, (v) => { obj.set('text', v); canvas.requestRenderAll(); }, false, 'textarea');
+                    addPropInput(propsGroup, 'Contenido', obj.text, (v) => { obj.set('text', v); canvas.requestRenderAll(); }, false, 'textarea');
                     
                     if (obj.type === 'textbox') {
                         let widthVal = obj.width;
@@ -1813,7 +2357,7 @@
                             readOnlyWidth = true;
                         }
 
-                        addPropInput(container, 'Ancho Caja', widthVal, (v) => { 
+                        addPropInput(propsGroup, 'Ancho Caja', widthVal, (v) => { 
                             if (readOnlyWidth) return;
                             obj.set('width', parseInt(v)); 
                             canvas.requestRenderAll(); 
@@ -1824,33 +2368,55 @@
                     tipGrid.style.display = 'grid';
                     tipGrid.style.gridTemplateColumns = '1fr 1fr';
                     tipGrid.style.gap = '10px';
-                    container.appendChild(tipGrid);
+                    propsGroup.appendChild(tipGrid);
 
                     addPropSelect(tipGrid, 'Tipografía', obj.fontFamily, AVAILABLE_FONTS, (v) => { 
-                        obj.set('fontFamily', v); canvas.requestRenderAll(); 
+                        // Asegurar carga de fuente y luego aplicar
+                        if (window.ensureFontLoaded) {
+                            window.ensureFontLoaded(v, obj.fontWeight).then(() => {
+                                obj.set('fontFamily', v); 
+                                canvas.requestRenderAll();
+                            });
+                        } else {
+                            obj.set('fontFamily', v); 
+                            canvas.requestRenderAll();
+                        }
                     });
                     
                     addPropSelect(tipGrid, 'Peso', obj.fontWeight, ['normal', 'bold', '100', '300', '600', '800', '900'], (v) => {
-                        obj.set('fontWeight', v); canvas.requestRenderAll();
+                        obj.set('fontWeight', v); 
+                        if (window.ensureFontLoaded) {
+                            window.ensureFontLoaded(obj.fontFamily, v).then(() => canvas.requestRenderAll());
+                        } else {
+                            canvas.requestRenderAll();
+                        }
+                    });
+
+                    const alignVal = (obj.customProps && obj.customProps.alineacion) || obj.textAlign || 'left';
+                    addPropSelect(propsGroup, 'Alineación texto', alignVal, ['left','center','right'], (v) => {
+                        if (!obj.customProps) obj.customProps = {};
+                        obj.customProps.alineacion = v;
+                        obj.set('textAlign', v);
+                        canvas.requestRenderAll();
                     });
 
                     const typoGrid2 = document.createElement('div');
                     typoGrid2.style.display = 'grid';
                     typoGrid2.style.gridTemplateColumns = '1fr 1fr';
                     typoGrid2.style.gap = '10px';
-                    container.appendChild(typoGrid2);
+                    propsGroup.appendChild(typoGrid2);
 
                     addPropInput(typoGrid2, 'Tamaño Fuente', obj.fontSize, (v) => { obj.set('fontSize', parseInt(v)); canvas.requestRenderAll(); });
                     addPropInput(typoGrid2, 'Espaciado Letras', obj.charSpacing || 0, (v) => { obj.set('charSpacing', parseInt(v)); canvas.requestRenderAll(); });
 
-                    addPropInput(container, 'Interlineado', obj.lineHeight || 1, (v) => { obj.set('lineHeight', parseFloat(v)); canvas.requestRenderAll(); });
+                    addPropInput(propsGroup, 'Interlineado', obj.lineHeight || 1, (v) => { obj.set('lineHeight', parseFloat(v)); canvas.requestRenderAll(); });
 
                     // Borde de Texto (stroke)
                     const borderGrid = document.createElement('div');
                     borderGrid.style.display = 'grid';
                     borderGrid.style.gridTemplateColumns = '1fr 1fr';
                     borderGrid.style.gap = '10px';
-                    container.appendChild(borderGrid);
+                    propsGroup.appendChild(borderGrid);
 
                     const bordeG = (obj.customProps && obj.customProps.borde_grosor) || 0;
                     addPropInput(borderGrid, 'Borde Grosor', bordeG, (v) => {
@@ -1864,28 +2430,202 @@
                     });
                 }
             }
+
+            const shadowGroup = addGroupHeader(root, 'Sombras');
+            let sBlur = 0;
+            let sX = 0;
+            let sY = 0;
+            let sColor = '#000000';
+            let sAlpha = 100; // 0-100 (%)
+            if (obj.customProps && obj.customProps.sombra) {
+                const raw = String(obj.customProps.sombra || '');
+                const parts = raw.split(',').map(p => p.trim());
+                if (parts[0]) {
+                    const n = parseInt(parts[0]);
+                    if (!isNaN(n)) sBlur = n;
+                }
+                if (parts[1]) {
+                    const n = parseInt(parts[1]);
+                    if (!isNaN(n)) sX = n;
+                }
+                if (parts[2]) {
+                    const n = parseInt(parts[2]);
+                    if (!isNaN(n)) sY = n;
+                }
+                if (parts[3]) {
+                    sColor = parts[3];
+                    if (sColor[0] === '#' && (sColor.length === 9 || sColor.length === 5)) {
+                        const hexAlpha = sColor.length === 9 ? sColor.slice(7, 9) : sColor.slice(4, 5) + sColor.slice(4, 5);
+                        const aInt = parseInt(hexAlpha, 16);
+                        if (!isNaN(aInt)) {
+                            sAlpha = Math.round((aInt / 255) * 100);
+                            if (sAlpha < 0) sAlpha = 0;
+                            if (sAlpha > 100) sAlpha = 100;
+                        }
+                        sColor = '#' + sColor.slice(1, 7);
+                    }
+                }
+            }
+            function buildHexWithAlpha() {
+                let base = sColor;
+                if (base[0] === '#') {
+                    if (base.length === 4) {
+                        base = '#' + base[1] + base[1] + base[2] + base[2] + base[3] + base[3];
+                    }
+                    if (base.length === 7) {
+                        if (sAlpha >= 100) {
+                            return base;
+                        }
+                        const alphaInt = Math.round(255 * (sAlpha / 100));
+                        const aa = alphaInt.toString(16).padStart(2, '0');
+                        return base + aa;
+                    }
+                    if (base.length === 9) {
+                        return base;
+                    }
+                }
+                return base;
+            }
+
+            function applyFabricShadow() {
+                if (sBlur === 0 && sX === 0 && sY === 0) {
+                    obj.set('shadow', null);
+                    return;
+                }
+                obj.set('shadow', {
+                    color: buildHexWithAlpha(),
+                    blur: sBlur,
+                    offsetX: sX,
+                    offsetY: sY
+                });
+            }
+            function updateShadowProp() {
+                if (!obj.customProps) obj.customProps = {};
+                const colorOut = buildHexWithAlpha();
+                obj.customProps.sombra = sBlur + ', ' + sX + ', ' + sY + ', ' + colorOut;
+                applyFabricShadow();
+                canvas.requestRenderAll();
+            }
+            applyFabricShadow();
+            addPropInput(shadowGroup, 'Blur', sBlur, (v) => {
+                const n = parseInt(v);
+                sBlur = isNaN(n) ? 0 : n;
+                updateShadowProp();
+            }, false, 'number');
+            addPropInput(shadowGroup, 'Offset X', sX, (v) => {
+                const n = parseInt(v);
+                sX = isNaN(n) ? 0 : n;
+                updateShadowProp();
+            }, false, 'number');
+            addPropInput(shadowGroup, 'Offset Y', sY, (v) => {
+                const n = parseInt(v);
+                sY = isNaN(n) ? 0 : n;
+                updateShadowProp();
+            }, false, 'number');
+            addPropColor(shadowGroup, 'Color Sombra', sColor, (v) => {
+                sColor = v;
+                updateShadowProp();
+            });
+            addPropInput(shadowGroup, 'Opacidad (%)', sAlpha, (v) => {
+                const n = parseInt(v);
+                sAlpha = isNaN(n) ? 100 : Math.max(0, Math.min(100, n));
+                updateShadowProp();
+            });
             
-            // Delete
-            const delBtn = document.createElement('button');
-            delBtn.className = 'btn btn-danger';
-            delBtn.style.marginTop = '20px';
-            delBtn.style.width = '100%';
-            delBtn.innerHTML = '<i class="fas fa-trash"></i> Eliminar';
-            delBtn.onclick = () => {
+        }
+
+        function setWorkspaceZoom(scale) {
+            workspaceZoom = scale;
+            const wrap = document.getElementById('canvas-wrapper');
+            if (!wrap) return;
+            wrap.style.transformOrigin = 'center center';
+            wrap.style.transform = 'scale(' + scale + ')';
+        }
+
+        function renderBottomActions(obj) {
+            const holder = document.getElementById('props-container');
+            if (!holder) return;
+            holder.innerHTML = '';
+
+            const btnJson = document.createElement('button');
+            btnJson.className = 'btn btn-secondary';
+            btnJson.style.width = '100%';
+            btnJson.innerHTML = '<i class="fas fa-code"></i> Cargar JSON';
+            btnJson.onclick = () => {
+                showJsonModal();
+            };
+            holder.appendChild(btnJson);
+
+            const btnGen = document.createElement('button');
+            btnGen.className = 'btn';
+            btnGen.style.marginTop = '8px';
+            btnGen.style.width = '100%';
+            btnGen.innerHTML = '<i class="fas fa-broadcast-tower"></i> Generar / Exportar';
+            btnGen.onclick = () => {
+                generateRemote();
+            };
+            holder.appendChild(btnGen);
+
+            const btnDel = document.createElement('button');
+            btnDel.className = 'btn btn-danger';
+            btnDel.style.marginTop = '8px';
+            btnDel.style.width = '100%';
+            btnDel.innerHTML = '<i class="fas fa-trash"></i> Eliminar';
+            if (!obj) {
+                btnDel.disabled = true;
+                btnDel.style.opacity = '0.4';
+                btnDel.style.cursor = 'default';
+            }
+            btnDel.onclick = () => {
+                if (!obj) return;
                 canvas.remove(obj);
                 updateLayersList();
                 renderProperties(null);
             };
-            container.appendChild(delBtn);
+            holder.appendChild(btnDel);
         }
 
         // --- UI HELPERS ---
 
         function addGroupHeader(parent, text) {
-            const div = document.createElement('div');
-            div.className = 'prop-group';
-            div.innerHTML = `<h4>${text}</h4>`;
-            parent.appendChild(div);
+            const section = document.createElement('div');
+            section.className = 'accordion-section';
+            section.setAttribute('data-prop-group', 'true');
+
+            const id = `props-acc-${Math.random().toString(36).substr(2, 9)}`;
+
+            const header = document.createElement('button');
+            header.className = 'accordion-header';
+            header.setAttribute('data-accordion-target', id);
+            header.innerHTML = `<span>${text}</span><i class="fas fa-chevron-down" style="font-size: 0.7rem;"></i>`;
+
+            const body = document.createElement('div');
+            body.className = 'accordion-body';
+            body.id = id;
+
+            section.appendChild(header);
+            section.appendChild(body);
+
+            const sentinel = document.getElementById('props-container');
+            if (sentinel && parent === document.getElementById('properties')) {
+                parent.insertBefore(section, sentinel);
+            } else {
+                parent.appendChild(section);
+            }
+
+            header.addEventListener('click', () => {
+                const isOpen = body.classList.contains('open');
+                document.querySelectorAll('.accordion-body').forEach(b => b.classList.remove('open'));
+                if (!isOpen) {
+                    body.classList.add('open');
+                }
+            });
+
+            if (!document.querySelector('.accordion-body.open')) {
+                body.classList.add('open');
+            }
+
+            return body;
         }
 
         function addPropInput(parent, label, value, onChange, readonly=false, type='text') {
@@ -2084,6 +2824,10 @@
                 
                 list.appendChild(groupDiv);
             });
+
+            if (typeof updateTimelineFromBlocks === 'function') {
+                updateTimelineFromBlocks();
+            }
         }
         
         function moveLayerUp(obj) {
@@ -2102,6 +2846,10 @@
                 const sel = new fabric.ActiveSelection(objs, { canvas: canvas });
                 canvas.setActiveObject(sel);
                 canvas.requestRenderAll();
+            }
+            const label = document.getElementById('top-header-block-label');
+            if (label) {
+                label.innerText = 'Bloque activo: ' + blockId;
             }
         }
 
@@ -2175,6 +2923,72 @@
             });
 
             return output;
+        }
+
+        function getGlobalDurationForTimeline() {
+            const inicioEl = document.getElementById('conf-inicio');
+            const finEl = document.getElementById('conf-fin');
+            let start = 0;
+            let end = 0;
+            if (inicioEl && inicioEl.value !== '') {
+                const v = parseFloat(inicioEl.value);
+                if (!isNaN(v) && v >= 0) start = v;
+            }
+            if (finEl && finEl.value !== '') {
+                const v = parseFloat(finEl.value);
+                if (!isNaN(v) && v > start) end = v;
+            }
+            if (end <= start) {
+                end = start + 10;
+            }
+            return { start, end, total: end - start };
+        }
+
+        function getBlockWindowForTimeline(bid) {
+            const cfg = blockConfigs[bid] || {};
+            const global = getGlobalDurationForTimeline();
+            let inicio = null;
+            let fin = null;
+            let dur = null;
+
+            if (cfg.inicio !== undefined && cfg.inicio !== '') {
+                const v = parseFloat(cfg.inicio);
+                if (!isNaN(v)) inicio = v;
+            }
+            if (cfg.fin !== undefined && cfg.fin !== '') {
+                const v = parseFloat(cfg.fin);
+                if (!isNaN(v)) fin = v;
+            }
+            if (cfg.duracion !== undefined && cfg.duracion !== '') {
+                const v = parseFloat(cfg.duracion);
+                if (!isNaN(v)) dur = v;
+            }
+
+            let start = global.start;
+            let end = global.end;
+
+            if (inicio !== null && fin !== null) {
+                start = inicio;
+                end = fin;
+            } else if (dur !== null) {
+                start = global.start;
+                end = global.start + dur;
+            }
+
+            if (end > global.end) end = global.end;
+            if (end <= start) end = start;
+
+            return { start, end, total: global.total };
+        }
+
+        function updateTimelineFromBlocks() {
+            const durationLabel = document.getElementById('timeline-duration-label');
+            const blocks = getBlocks();
+            const global = getGlobalDurationForTimeline();
+
+            if (durationLabel) {
+                durationLabel.innerText = 'Duración estimada: ' + global.total.toFixed(1) + 's';
+            }
         }
 
         function mapFabricToSchema(obj, refObj) {
@@ -2274,8 +3088,12 @@
                 if (obj.customProps && obj.customProps.padding) {
                     el.padding = obj.customProps.padding;
                 }
-            } else if (obj.type === 'rect' || obj.elementType === 'imagen') {
-                el.size = `${Math.round(obj.getScaledWidth())}, ${Math.round(obj.getScaledHeight())}`;
+            } else if (obj.type === 'rect' || obj.elementType === 'rectangulo' || obj.elementType === 'imagen') {
+                if ((obj.elementType === 'rectangulo' || obj.type === 'rect') && obj.customProps && obj.customProps.size) {
+                    el.size = obj.customProps.size;
+                } else {
+                    el.size = `${Math.round(obj.getScaledWidth())}, ${Math.round(obj.getScaledHeight())}`;
+                }
             } else if (obj.elementType === 'texto_dos_columnas') {
                 el.size = `${Math.round(obj.getScaledWidth())}, ${Math.round(obj.getScaledHeight())}`;
             } else if (obj.type === 'textbox' || obj.type === 'text') {
@@ -2304,7 +3122,7 @@
                 } else if (obj.rx || obj.ry) {
                     el.radius = Math.round((obj.rx + obj.ry) / 2);
                 }
-            } else if (el.tipo === 'imagen') {
+            } else if (el.tipo === 'imagen' || el.tipo === 'video') {
                 // Soporte de radius para imágenes (se aplica en backend)
                 if (obj.customProps && obj.customProps.radius) {
                     el.radius = obj.customProps.radius;
@@ -2337,14 +3155,7 @@
                 }
             }
             
-            if (el.tipo === 'texto' || el.tipo === 'marquesina') {
-                el.contenido = obj.text;
-                el.tipografia = obj.fontFamily.toLowerCase();
-                el.peso = WEIGHT_MAP[obj.fontWeight] || 'regular';
-                if (obj.backgroundColor) el.fondo_texto = obj.backgroundColor;
-            }
-            
-            if (el.tipo === 'imagen') {
+            if (el.tipo === 'imagen' || el.tipo === 'video') {
                 let imgUrl = null;
                 if (obj.customProps && obj.customProps.contenido) {
                     imgUrl = obj.customProps.contenido;
@@ -2362,9 +3173,7 @@
                 // But merging everything is fine, backend ignores unknowns.
                 Object.assign(el, obj.customProps);
                 
-                // CRITICAL FIX (refinado): Eliminar margin/padding SOLO para elementos que NO son
-                // marquesina, texto_varias_columnas o imagen (imagen usa margin en ejemplos)
-                if (el.tipo !== 'marquesina' && el.tipo !== 'texto_varias_columnas' && el.tipo !== 'imagen') {
+                if (el.tipo !== 'marquesina' && el.tipo !== 'texto_varias_columnas' && el.tipo !== 'imagen' && el.tipo !== 'video') {
                     delete el.margin;
                     delete el.margin_x;
                     delete el.margin_y;
@@ -2378,6 +3187,18 @@
                 // Remove alignment props from root if they conflict (though backend doesn't use alignX/Y directly usually)
                 delete el.alignX;
                 delete el.alignY;
+            }
+            
+            // Es fundamental que el contenido y alineación del texto
+            // reflejen lo que se ve en el canvas. Si en la carga previa
+            // quedaron sombras en customProps (contenido/alineacion),
+            // las sobrescribimos con el estado actual del objeto.
+            if (el.tipo === 'texto' || el.tipo === 'marquesina') {
+                el.contenido = obj.text;
+                el.tipografia = (obj.fontFamily || '').toLowerCase();
+                el.peso = WEIGHT_MAP[obj.fontWeight] || 'regular';
+                if (obj.backgroundColor) el.fondo_texto = obj.backgroundColor;
+                if (obj.textAlign) el.alineacion = obj.textAlign;
             }
             
             return el;
@@ -2459,18 +3280,30 @@
                 const rawX = posParts[0] ? posParts[0].trim().toLowerCase() : '0';
                 const rawY = posParts[1] ? posParts[1].trim().toLowerCase() : '0';
                 
-                if (rawX === 'center') left = canvas.width / 2;
-                else if (rawX === 'left') left = 0;
-                else if (rawX === 'right') left = canvas.width;
-                else {
+                if (rawX === 'center') {
+                    left = canvas.width / 2;
+                } else if (rawX === 'left') {
+                    left = 0;
+                } else if (rawX === 'right') {
+                    left = canvas.width;
+                } else if (rawX.endsWith('%')) {
+                    const pctX = parseFloat(rawX.replace('%', ''));
+                    left = isNaN(pctX) ? 0 : (canvas.width * pctX / 100);
+                } else {
                     const nX = parseInt(rawX);
                     left = isNaN(nX) ? 0 : nX;
                 }
                 
-                if (rawY === 'center') top = canvas.height / 2;
-                else if (rawY === 'top') top = 0;
-                else if (rawY === 'bottom') top = canvas.height;
-                else {
+                if (rawY === 'center') {
+                    top = canvas.height / 2;
+                } else if (rawY === 'top') {
+                    top = 0;
+                } else if (rawY === 'bottom') {
+                    top = canvas.height;
+                } else if (rawY.endsWith('%')) {
+                    const pctY = parseFloat(rawY.replace('%', ''));
+                    top = isNaN(pctY) ? 0 : (canvas.height * pctY / 100);
+                } else {
                     const nY = parseInt(rawY);
                     top = isNaN(nY) ? 0 : nY;
                 }
@@ -2529,26 +3362,117 @@
 
                 obj = new fabric.Rect({
                     left, top, width: w, height: h,
-                    fill: el.color || '#000000',
+                    fill: (typeof el.color === 'string') ? el.color : '#000000',
                     opacity: el.transparencia ? (1 - el.transparencia) : 1,
                     rx, ry
                 });
                 
+                if (!obj.customProps) obj.customProps = {};
+                obj.customProps.size = `${w}, ${h}`;
                 if (customRadius !== null) {
-                    if (!obj.customProps) obj.customProps = {};
                     obj.customProps.radius = customRadius;
+                }
+                if (el.color && typeof el.color === 'object' && (el.color.tipo === 'linear' || el.color.tipo === 'lineal')) {
+                    obj.customProps.color = el.color;
+                    // Aplicar gradiente visual en Fabric
+                    (function applyGrad(o, gdef) {
+                        const deg = gdef.angulo || 0;
+                        let mid = gdef.punto_medio;
+                        if (mid === undefined || mid === null || isNaN(parseFloat(mid))) {
+                            mid = 100;
+                        }
+                        mid = parseFloat(mid);
+                        if (mid > 1) mid = mid / 100;
+                        if (mid < 0) mid = 0;
+                        if (mid > 1) mid = 1;
+
+                        const a = (parseFloat(deg) || 0) * Math.PI / 180;
+                        const vx = Math.cos(a), vy = Math.sin(a);
+                        const cx = 0.5, cy = 0.5;
+                        function tToEdge(px, pv) {
+                            if (pv > 0) return (1 - px) / pv;
+                            if (pv < 0) return (0 - px) / pv;
+                            return Infinity;
+                        }
+                        const tPos = Math.min(tToEdge(cx, vx), tToEdge(cy, vy));
+                        const tNeg = Math.min(tToEdge(1 - cx, -vx), tToEdge(1 - cy, -vy));
+                        const x1 = cx - vx * tNeg;
+                        const y1 = cy - vy * tNeg;
+                        const x2 = cx + vx * tPos;
+                        const y2 = cy + vy * tPos;
+                        function hexToRgbA(h) {
+                            if (!h || typeof h !== 'string') return { color: '#000000', opacity: 1 };
+                            let hex = h.replace('#', '').trim();
+                            if (hex.length === 3) hex = hex.split('').map(c => c + c).join('');
+                            let a = 255;
+                            if (hex.length === 8) {
+                                a = parseInt(hex.slice(6, 8), 16);
+                                hex = hex.slice(0, 6);
+                            }
+                            const opacity = Math.max(0, Math.min(1, a / 255));
+                            const color = '#' + hex.toUpperCase();
+                            return { color, opacity };
+                        }
+                        const c1 = hexToRgbA(gdef.colores[0] || '#FFFFFFFF');
+                        const c2 = hexToRgbA(gdef.colores[1] || '#FFFFFF00');
+                        const midOffset = Math.max(0, Math.min(1, mid));
+                        const grad = new fabric.Gradient({
+                            type: 'linear',
+                            gradientUnits: 'percentage',
+                            coords: { x1, y1, x2, y2 },
+                            colorStops: [
+                                { offset: 0, color: c1.color, opacity: c1.opacity },
+                                { offset: midOffset, color: c1.color, opacity: c1.opacity },
+                                { offset: 1, color: c2.color, opacity: c2.opacity }
+                            ]
+                        });
+                        o.set('fill', grad);
+                    })(obj, el.color);
+                } else if (typeof el.color === 'string') {
+                    obj.customProps.color = el.color;
                 }
 
             } else if (el.tipo === 'texto' || el.tipo === 'marquesina') {
+                const txtAlign = el.alineacion || 'left';
+                const rawFamily = el.tipografia || 'Arial';
+                const cssFamily = (window.normalizeCssFamily ? window.normalizeCssFamily(rawFamily) : rawFamily);
+                const rawPeso = String(el.peso || 'regular').toLowerCase();
+                const pesoToCss = (w) => {
+                    switch (w) {
+                        case 'thin': return '100';
+                        case 'extralight': return '200';
+                        case 'light': return '300';
+                        case 'regular':
+                        case 'normal': return '400';
+                        case 'medium': return '500';
+                        case 'semibold':
+                        case 'semibol':
+                        case 'semiBold': return '600';
+                        case 'bold': return '700';
+                        case 'extrabold': return '800';
+                        case 'black': return '900';
+                        default:
+                            return isNaN(parseInt(w)) ? '400' : String(parseInt(w));
+                    }
+                };
+                const cssWeight = pesoToCss(rawPeso);
                 obj = new fabric.Textbox(el.contenido || 'Texto', {
                     left, top,
                     fontSize: el.size_texto || 40,
-                    fontFamily: el.tipografia || 'Arial',
-                    fontWeight: el.peso || 'normal',
+                    fontFamily: cssFamily,
+                    fontWeight: cssWeight,
                     fill: el.color || '#FFFFFF',
                     backgroundColor: el.fondo_texto || '',
-                    opacity: el.transparencia ? (1 - el.transparencia) : 1
+                    opacity: el.transparencia ? (1 - el.transparencia) : 1,
+                    textAlign: txtAlign
                 });
+                if (window.ensureFontLoaded) {
+                    window.ensureFontLoaded(cssFamily, cssWeight).then(() => {
+                        obj.set('fontFamily', cssFamily);
+                        obj.set('fontWeight', cssWeight);
+                        canvas.requestRenderAll();
+                    });
+                }
                 
                 const refInBlock = existingInBlock[0];
                 const shouldLockToRect = !isFirst && refInBlock && refInBlock.type === 'rect';
@@ -2588,6 +3512,29 @@
                     finalizeObjectCreation(img, blockId, el, isFirst, existingInBlock[0], posParts);
                 });
                 return; 
+            } else if (el.tipo === 'video') {
+                let w = 200, h = 112;
+                if (el.size) {
+                    const sParts = String(el.size).split(',');
+                    const pw = parseInt(sParts[0]);
+                    const ph = parseInt(sParts[1]);
+                    if (!isNaN(pw) && pw > 0) w = pw;
+                    if (!isNaN(ph) && ph > 0) h = ph;
+                }
+                obj = new fabric.Rect({
+                    left, top,
+                    width: w,
+                    height: h,
+                    fill: '#000000',
+                    stroke: '#ffffff',
+                    strokeDashArray: [6, 4],
+                    opacity: el.transparencia ? (1 - el.transparencia) : 1
+                });
+                if (!obj.customProps) obj.customProps = {};
+                if (el.contenido) obj.customProps.contenido = el.contenido;
+                if (el.radius) obj.customProps.radius = el.radius;
+                if (el.padding) obj.customProps.padding = el.padding;
+                if (el.margin) obj.customProps.margin = el.margin;
             } else {
                 // Fallback
                 obj = new fabric.Textbox(`[${el.tipo}]`, {
@@ -2606,7 +3553,9 @@
             obj.elementType = el.tipo;
             
             // Restore Custom Props
-            const standardKeys = ['tipo', 'posicion', 'size', 'size_texto', 'color', 'transparencia', 'tipografia', 'peso', 'fondo_texto', 'radius'];
+            // Importante: excluir 'contenido' y 'alineacion' para que no
+            // sobreescriban cambios hechos en el editor al exportar.
+            const standardKeys = ['tipo', 'posicion', 'size', 'size_texto', 'color', 'transparencia', 'tipografia', 'peso', 'fondo_texto', 'radius', 'contenido', 'alineacion'];
             if (!obj.customProps) obj.customProps = {};
             for(let key in el) {
                 if(!standardKeys.includes(key)) {
@@ -2618,8 +3567,8 @@
             if (!isFirst && refObj) {
                  const valXRaw = posParts[0] ? posParts[0].trim() : '0';
                  const valYRaw = posParts[1] ? posParts[1].trim() : '0';
-                 const valX = valXRaw.toLowerCase();
-                 const valY = valYRaw.toLowerCase();
+                const valX = valXRaw.toLowerCase();
+                const valY = valYRaw.toLowerCase();
                  
                  // X Alignment
                  if (valX === 'center') {
@@ -2652,31 +3601,39 @@
                  const valX = valXRaw.toLowerCase();
                  const valY = valYRaw.toLowerCase();
                  
-                 if (valX === 'center') {
-                     obj.set('left', (canvas.width - obj.getScaledWidth())/2);
-                     obj.customProps.alignX = 'center';
-                 } else if (valX === 'right') {
-                     obj.set('left', canvas.width - obj.getScaledWidth());
-                     obj.customProps.alignX = 'right';
-                 } else if (valX === 'left') {
-                     obj.set('left', 0);
-                     obj.customProps.alignX = 'left';
-                 } else {
-                     obj.set('left', parseInt(valX) || 0);
-                 }
+                if (valX === 'center') {
+                    obj.set('left', (canvas.width - obj.getScaledWidth())/2);
+                    obj.customProps.alignX = 'center';
+                } else if (valX === 'right') {
+                    obj.set('left', canvas.width - obj.getScaledWidth());
+                    obj.customProps.alignX = 'right';
+                } else if (valX === 'left') {
+                    obj.set('left', 0);
+                    obj.customProps.alignX = 'left';
+                } else if (valX.endsWith('%')) {
+                    const pctX = parseFloat(valX.replace('%', ''));
+                    const pxX = isNaN(pctX) ? 0 : (canvas.width * pctX / 100);
+                    obj.set('left', pxX);
+                } else {
+                    obj.set('left', parseInt(valX) || 0);
+                }
                  
-                 if (valY === 'center') {
-                     obj.set('top', (canvas.height - obj.getScaledHeight())/2);
-                     obj.customProps.alignY = 'center';
-                 } else if (valY === 'bottom') {
-                     obj.set('top', canvas.height - obj.getScaledHeight());
-                     obj.customProps.alignY = 'bottom';
-                 } else if (valY === 'top') {
-                     obj.set('top', 0);
-                     obj.customProps.alignY = 'top';
-                 } else {
-                     obj.set('top', parseInt(valY) || 0);
-                 }
+                if (valY === 'center') {
+                    obj.set('top', (canvas.height - obj.getScaledHeight())/2);
+                    obj.customProps.alignY = 'center';
+                } else if (valY === 'bottom') {
+                    obj.set('top', canvas.height - obj.getScaledHeight());
+                    obj.customProps.alignY = 'bottom';
+                } else if (valY === 'top') {
+                    obj.set('top', 0);
+                    obj.customProps.alignY = 'top';
+                } else if (valY.endsWith('%')) {
+                    const pctY = parseFloat(valY.replace('%', ''));
+                    const pxY = isNaN(pctY) ? 0 : (canvas.height * pctY / 100);
+                    obj.set('top', pxY);
+                } else {
+                    obj.set('top', parseInt(valY) || 0);
+                }
                  obj.setCoords();
             }
 

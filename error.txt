@@ -1,0 +1,346 @@
+{
+    "json": true,
+    "nombre": "render_remoto.mp4",
+    "inicio": "0",
+    "fin": "2",
+    "ancho": 1020,
+    "alto": 816,
+    "zoom": 1,
+    "video": "https://www.cdev.mx/input.mp4",
+    "logo": "",
+    "audio": "",
+    "layout": {
+        "bloque_2": [
+            {
+                "tipo": "bloque_meta"
+            },
+            {
+                "tipo": "rectangulo",
+                "posicion": "195, 40",
+                "size": "662, 63",
+                "color": "#292A2D",
+                "radius": "15, 15, 15, 15"
+            },
+            {
+                "tipo": "texto",
+                "posicion": "center, center",
+                "size_texto": 25,
+                "width": 700,
+                "color": "#ffffff",
+                "contenido": "098 702 484  099 724 117   092 689 695",
+                "tipografia": "montserrat",
+                "peso": "bold",
+                "alineacion": "center"
+            }
+        ],
+        "bloque_3": [
+            {
+                "tipo": "bloque_meta"
+            },
+            {
+                "tipo": "rectangulo",
+                "posicion": "24, 727",
+                "size": "805, 45",
+                "color": "#292A2D",
+                "transparencia": 0.09999999999999998,
+                "radius": "0, 0, 15, 15"
+            },
+            {
+                "tipo": "texto_varias_columnas",
+                "posicion": "center, center",
+                "size": "805, 45",
+                "gap": 0,
+                "padding": "0",
+                "interlineado": 5,
+                "borde_grosor": 1,
+                "color": "#FFFFFF",
+                "columnas": [
+                    {
+                        "contenido": "64",
+                        "width": "20%",
+                        "alineacion": "center",
+                        "color": "#FFFFFF",
+                        "tipografia": "Montserrat",
+                        "size_texto": 18,
+                        "peso": "regular"
+                    },
+                    {
+                        "contenido": "168",
+                        "width": "10%",
+                        "alineacion": "center",
+                        "color": "#FFFFFF",
+                        "tipografia": "Montserrat",
+                        "size_texto": 18,
+                        "peso": "regular"
+                    },
+                    {
+                        "contenido": "BMB",
+                        "width": "10%",
+                        "alineacion": "center",
+                        "color": "#FFFFFF",
+                        "tipografia": "Montserrat",
+                        "size_texto": 18,
+                        "peso": "regular"
+                    },
+                    {
+                        "contenido": "BMB",
+                        "width": "60%",
+                        "alineacion": "center",
+                        "color": "#FFFFFF",
+                        "tipografia": "Montserrat",
+                        "size_texto": 18,
+                        "peso": "regular"
+                    }
+                ]
+            }
+        ],
+        "bloque_4": [
+            {
+                "tipo": "bloque_meta"
+            },
+            {
+                "tipo": "marquesina",
+                "posicion": "29, 95%",
+                "size_texto": 18,
+                "color": "#ffffff",
+                "velocidad": 100,
+                "bg_color": "#292A2D",
+                "transparencia": 0,
+                "padding": "0, 10, 0, 10",
+                "radius": "0, 0, 15, 15",
+                "size": "800, 35",
+                "borde_color": "#ffffff",
+                "contenido": "Están en campos flojos de arena lo cual al. cambiar de esto, este es un texto de prueba",
+                "tipografia": "roboto",
+                "peso": "regular",
+                "fondo_texto": "#ffffff",
+                "alineacion": "center"
+            }
+        ],
+        "bloque_5": [
+            {
+                "tipo": "bloque_meta"
+            },
+            {
+                "tipo": "rectangulo",
+                "posicion": "25, 680",
+                "size": "806, 46",
+                "color": "#292A2D",
+                "transparencia": 0.30000000000000004,
+                "radius": "15, 15, 0, 0"
+            },
+            {
+                "tipo": "texto_varias_columnas",
+                "posicion": "center",
+                "size": "806, 46",
+                "gap": 1,
+                "padding": "0",
+                "interlineado": 5,
+                "borde_grosor": 0,
+                "columnas": [
+                    {
+                        "contenido": "Cabezas",
+                        "width": "20%",
+                        "alineacion": "center",
+                        "color": "#FFFFFF",
+                        "tipografia": "Montserrat",
+                        "size_texto": 18,
+                        "peso": "regular",
+                        "bg_color": "",
+                        "borde_grosor": 1,
+                        "radius": "15,15,0,0"
+                    },
+                    {
+                        "contenido": "Peso",
+                        "width": "10%",
+                        "alineacion": "center",
+                        "color": "#FFFFFF",
+                        "tipografia": "Montserrat",
+                        "size_texto": 18,
+                        "peso": "regular",
+                        "bg_color": "",
+                        "borde_grosor": 1
+                    },
+                    {
+                        "contenido": "Clase",
+                        "width": "10%",
+                        "alineacion": "center",
+                        "color": "#FFFFFF",
+                        "tipografia": "Montserrat",
+                        "size_texto": 18,
+                        "peso": "regular",
+                        "bg_color": "",
+                        "borde_grosor": 1
+                    },
+                    {
+                        "contenido": "Paraje Piedras Coloradas",
+                        "width": "60%",
+                        "alineacion": "left",
+                        "color": "#FFFFFF",
+                        "tipografia": "Montserrat",
+                        "size_texto": 16,
+                        "peso": "regular",
+                        "bg_color": "",
+                        "borde_grosor": 1
+                    }
+                ]
+            }
+        ],
+        "bloque_6": [
+            {
+                "tipo": "bloque_meta"
+            },
+            {
+                "tipo": "rectangulo",
+                "posicion": "25, 632",
+                "size": "801, 40",
+                "transparencia": 0.19999999999999996,
+                "radius": "15, 15, 0, 0",
+                "color": {
+                    "tipo": "linear",
+                    "colores": [
+                        "#FFFFFFFF",
+                        "#FFFFFF00"
+                    ],
+                    "angulo": 0,
+                    "punto_medio": 64
+                }
+            },
+            {
+                "tipo": "texto",
+                "posicion": "221, center",
+                "size_texto": 25,
+                "width": 701,
+                "color": "#292A2D",
+                "contenido": "TERNEROS 141 A 180 KG",
+                "tipografia": "montserrat",
+                "peso": "bold",
+                "alineacion": "left"
+            }
+        ],
+        "bloque_7": [
+            {
+                "tipo": "bloque_meta"
+            },
+            {
+                "tipo": "rectangulo",
+                "posicion": "25, 632",
+                "size": "210, 40",
+                "color": "#fffb00",
+                "transparencia": 0.19999999999999996,
+                "radius": "15, 15, 0, 0"
+            },
+            {
+                "tipo": "texto",
+                "posicion": "center, center",
+                "size_texto": 20,
+                "width": 81,
+                "color": "#292A2D",
+                "contenido": "LOTE 7",
+                "tipografia": "montserrat",
+                "peso": "bold",
+                "alineacion": "center"
+            }
+        ],
+        "bloque_9": [
+            {
+                "tipo": "bloque_meta"
+            },
+            {
+                "tipo": "texto",
+                "posicion": "750, 470",
+                "size_texto": 20,
+                "width": 300,
+                "color": "#FFFFFF",
+                "sombra": "20, 5, 5, #00000080",
+                "contenido": "Paraje",
+                "tipografia": "roboto",
+                "peso": "regular",
+                "alineacion": "left"
+            },
+            {
+                "tipo": "texto",
+                "posicion": "750, 500",
+                "size_texto": 25,
+                "width": 300,
+                "color": "#FFFFFF",
+                "sombra": "20, 5, 5, #00000080",
+                "contenido": "Piedras Coloradas",
+                "tipografia": "montserrat",
+                "peso": "bold",
+                "alineacion": "left"
+            }
+        ],
+        "bloque_10": [
+            {
+                "tipo": "bloque_meta"
+            },
+            {
+                "tipo": "texto",
+                "posicion": "750, 500",
+                "size_texto": 20,
+                "width": 300,
+                "color": "#FFFFFF",
+                "sombra": "20, 5, 5, #00000080",
+                "contenido": "Piedras Coloradas",
+                "tipografia": "roboto",
+                "peso": "bold",
+                "alineacion": "left"
+            }
+        ],
+        "bloque_11": [
+            {
+                "tipo": "bloque_meta"
+            },
+            {
+                "tipo": "texto",
+                "posicion": "750, 528",
+                "size_texto": 20,
+                "width": 300,
+                "color": "#FFFFFF",
+                "sombra": "20, 5, 5, #00000080",
+                "contenido": "Paysandú",
+                "tipografia": "roboto",
+                "peso": "regular",
+                "alineacion": "left"
+            }
+        ],
+        "bloque_1": [
+            {
+                "tipo": "bloque_meta"
+            },
+            {
+                "tipo": "imagen",
+                "posicion": "25, 40",
+                "size": "100, 100",
+                "color": "rgb(0,0,0)",
+                "contenido": "https://www.cdev.mx/logo.png"
+            }
+        ],
+        "bloque_12": [
+            {
+                "tipo": "bloque_meta"
+            },
+            {
+                "tipo": "imagen",
+                "posicion": "698, 470",
+                "size": "50, 50",
+                "color": "rgb(0,0,0)",
+                "contenido": "https://apis.clientesunikms.com/editor_video/pin.svg"
+            }
+        ],
+        "bloque_8": [
+            {
+                "tipo": "bloque_meta"
+            },
+            {
+                "tipo": "imagen",
+                "posicion": "750, 558",
+                "size": "249, 171",
+                "color": "rgb(0,0,0)",
+                "contenido": "https://apis.clientesunikms.com/editor_video/mapa.jpg",
+                "sombra": "10, 0, 0, #000000"
+            }
+        ]
+    }
+}

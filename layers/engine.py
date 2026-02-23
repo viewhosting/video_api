@@ -1,9 +1,12 @@
 import os
 import math
+import shutil
+import subprocess
+import tempfile
 from typing import List, Dict, Any, Tuple, Optional, Union
-from PIL import Image, ImageDraw, ImageFont, ImageChops
+from PIL import Image, ImageDraw, ImageFont, ImageChops, ImageFilter
 import numpy as np
-from moviepy.editor import ImageClip, CompositeVideoClip
+from moviepy.editor import ImageClip, CompositeVideoClip, VideoFileClip
 import moviepy.video.fx.all as vfx
 from config import CANVAS_W, CANVAS_H, s
 from graphics_utils import get_pil_font_path
@@ -50,6 +53,54 @@ class RenderEngine:
             else:
                 # Lienzo personalizado: el valor ya viene en coordenadas reales
                 return int(base_val)
+
+    def _rasterize_svg(self, svg_path: str, out_w: Optional[int] = None, out_h: Optional[int] = None) -> Optional[str]:
+        """
+        Convierte un SVG en PNG temporal con fondo transparente.
+        Intenta primero con CairoSVG (si está disponible) y luego con ImageMagick.
+        Devuelve la ruta del PNG generado o None si falla.
+        """
+        try:
+            tmp_png = tempfile.NamedTemporaryFile(delete=False, suffix=".png").name
+            try:
+                import cairosvg  # type: ignore
+                kwargs = {}
+                if out_w and out_w > 0:
+                    kwargs["output_width"] = int(out_w)
+                if out_h and out_h > 0:
+                    kwargs["output_height"] = int(out_h)
+                cairosvg.svg2png(url=svg_path, write_to=tmp_png, background_color=None, **kwargs)
+                if os.path.exists(tmp_png) and os.path.getsize(tmp_png) > 0:
+                    return tmp_png
+            except Exception as e:
+                print(f"⚠️ CairoSVG no disponible o falló: {e}")
+            
+            # Fallback con ImageMagick
+            magick = shutil.which("magick") or shutil.which("convert")
+            if magick:
+                cmd = [magick]
+                if os.path.basename(magick).lower() == "magick":
+                    cmd += ["convert"]
+                cmd += ["-background", "none", svg_path]
+                if out_w and out_h and out_w > 0 and out_h > 0:
+                    cmd += ["-resize", f"{int(out_w)}x{int(out_h)}"]
+                cmd += ["png32:" + tmp_png]
+                try:
+                    subprocess.run(cmd, check=True, capture_output=True)
+                    if os.path.exists(tmp_png) and os.path.getsize(tmp_png) > 0:
+                        return tmp_png
+                except subprocess.CalledProcessError as cpe:
+                    err = cpe.stderr.decode().strip() if cpe.stderr else f"exit {cpe.returncode}"
+                    print(f"❌ ImageMagick falló al rasterizar SVG: {err}")
+            try:
+                if os.path.exists(tmp_png):
+                    os.remove(tmp_png)
+            except:
+                pass
+            return None
+        except Exception as e:
+            print(f"⚠️ Error preparando rasterización de SVG: {e}")
+            return None
 
     def _parse_coords(self, coord_str: str) -> Tuple[int, int]:
         """Convierte "x,y" en tupla (x, y) parseada."""
@@ -155,12 +206,37 @@ class RenderEngine:
             
         return (x + mx, y + my)
 
+    def _parse_shadow(self, el: Dict[str, Any]):
+        """
+        Parsea la sombra si existe.
+        Formato esperado: \"sombra\": \"blur, x, y, #000000\"
+        Devuelve (blur, dx, dy, (r,g,b,a)) o None si no aplica.
+        """
+        raw = el.get("sombra")
+        if not raw:
+            return None
+        try:
+            s_str = str(raw)
+            parts = [p.strip() for p in s_str.split(",")]
+            if len(parts) < 4:
+                return None
+            blur = int(parts[0])
+            dx = int(parts[1])
+            dy = int(parts[2])
+            color_hex = parts[3]
+            color_rgba = self._hex_to_rgb(color_hex)
+            return blur, dx, dy, color_rgba
+        except Exception as e:
+            print(f"⚠️ Error parseando sombra '{raw}': {e}")
+            return None
+
 
     def _create_marquee_clip(self, el: Dict[str, Any], duration: float) -> Optional[CompositeVideoClip]:
         """
         Crea un clip animado tipo marquesina (texto desplazándose).
         """
         try:
+            sombra = self._parse_shadow(el)
             raw_content = str(el.get("contenido", el.get("texto", "")))
             if not raw_content or not raw_content.strip():
                 # raise ValueError("La marquesina requiere un campo 'contenido' válido (no vacío ni solo espacios).")
@@ -172,10 +248,23 @@ class RenderEngine:
             # 1. DIMENSIONES Y POSICIÓN (con soporte 'center')
             # -----------------------------------------------------
             pos_str = str(el.get("posicion", "0,0")).lower()
-            size_str = str(el.get("size", "100%, 100"))
+            size_raw = el.get("size", "100%, 100")
+            size_str = str(size_raw).strip()
             
             # Parsear size primero
-            bar_w, bar_h = self._parse_coords(size_str)
+            if "," in size_str:
+                bar_w, bar_h = self._parse_coords(size_str)
+            else:
+                # Si solo viene un valor, interpretamos como ANCHO
+                # y usamos una altura por defecto basada en el tamaño de texto.
+                w_val = self._parse_value(size_str, self.canvas_w)
+                bar_w = max(1, w_val)
+                default_h = s(int(el.get("size_texto", 40))) * 2
+                bar_h = max(1, default_h)
+            
+            # Clamp de seguridad (evitar 0 que rompe MoviePy / numpy)
+            bar_w = max(1, int(bar_w))
+            bar_h = max(1, int(bar_h))
             
             # Parsear posición con lógica de centrado (relativo al Canvas)
             parts = [p.strip() for p in pos_str.split(",")]
@@ -208,10 +297,31 @@ class RenderEngine:
             container_clips = []
             
             # -----------------------------------------------------
-            # 2. FONDO (con Transparencia, Color, Radius)
+            # 2. FONDO (con Transparencia, Color, Radius) + Sombra opcional
             # -----------------------------------------------------
             bg_color_hex = el.get("bg_color", None)
             
+            # Sombra del contenedor de la marquesina (si se definió)
+            if sombra:
+                try:
+                    blur, dx, dy, color_rgba = sombra
+                    radius_raw_shadow = el.get("radius", 0)
+                    radius_s, corners_s = self._parse_radius(radius_raw_shadow)
+                    mask_shadow = Image.new("L", (bar_w, bar_h), 0)
+                    draw_shadow = ImageDraw.Draw(mask_shadow)
+                    if radius_s > 0:
+                        draw_shadow.rounded_rectangle((0, 0, bar_w, bar_h), radius=radius_s, corners=corners_s, fill=255)
+                    else:
+                        draw_shadow.rectangle((0, 0, bar_w, bar_h), fill=255)
+                    if blur > 0:
+                        mask_shadow = mask_shadow.filter(ImageFilter.GaussianBlur(blur))
+                    shadow_rgba = Image.new("RGBA", (bar_w, bar_h), color_rgba)
+                    shadow_rgba.putalpha(mask_shadow)
+                    shadow_clip = ImageClip(np.array(shadow_rgba)).set_pos((dx, dy)).set_duration(duration)
+                    container_clips.append(shadow_clip)
+                except Exception as e:
+                    print(f"⚠️ Sombra marquesina error: {e}")
+
             if bg_color_hex:
                 # Calcular opacidad
                 transparencia = float(el.get("transparencia", 0.0))
@@ -266,10 +376,18 @@ class RenderEngine:
                 offset_x = 0
                 offset_y = 0
             
-            # Margen de seguridad para evitar cortes en acentos
+            # Margen de seguridad para evitar cortes en acentos y espacio para sombra
             safe_margin = int(font_size * 0.2)
-            img_w = text_w + (safe_margin * 2)
-            img_h = text_h + (safe_margin * 2)
+            extra_shadow_pad = 0
+            if sombra:
+                try:
+                    blur_s, dx_s, dy_s, _ = sombra
+                    extra_shadow_pad = int(max(abs(dx_s), abs(dy_s)) + max(0, blur_s) * 2)
+                except Exception:
+                    extra_shadow_pad = 0
+            pad_total = safe_margin + extra_shadow_pad
+            img_w = text_w + (pad_total * 2)
+            img_h = text_h + (pad_total * 2)
             
             # Crear imagen base transparente
             txt_img = Image.new('RGBA', (img_w, img_h), (0, 0, 0, 0))
@@ -278,8 +396,34 @@ class RenderEngine:
             # Obtener color RGBA
             fill_color = self._hex_to_rgb(el.get("color", "#FFFFFF"))
             
-            # Dibujar texto
-            draw_txt.text((safe_margin + offset_x, safe_margin + offset_y), content, font=font_obj, fill=fill_color)
+            # Dibujar texto principal
+            text_x = pad_total + offset_x
+            text_y = pad_total + offset_y
+            draw_txt.text((text_x, text_y), content, font=font_obj, fill=fill_color)
+            
+            # Sombra sobre el texto (basada en alpha de glifos)
+            if sombra:
+                try:
+                    blur_t, dx_t, dy_t, color_rgba_t = sombra
+                    alpha_txt = txt_img.split()[3]
+                    shadow_mask = alpha_txt.copy()
+                    if blur_t > 0:
+                        shadow_mask = shadow_mask.filter(ImageFilter.GaussianBlur(blur_t))
+                    base_alpha = 255
+                    if isinstance(color_rgba_t, tuple) and len(color_rgba_t) == 4:
+                        base_alpha = color_rgba_t[3]
+                    if base_alpha < 255:
+                        factor = max(0.0, min(1.0, base_alpha / 255.0))
+                        shadow_mask = shadow_mask.point(lambda p: int(p * factor))
+                    shadow_rgba = Image.new("RGBA", txt_img.size, color_rgba_t)
+                    shadow_rgba.putalpha(shadow_mask)
+                    # Componer sombra con desplazamiento
+                    base_canvas = Image.new("RGBA", txt_img.size, (0, 0, 0, 0))
+                    base_canvas.paste(shadow_rgba, (dx_t, dy_t), shadow_rgba)
+                    base_canvas.paste(txt_img, (0, 0), txt_img)
+                    txt_img = base_canvas
+                except Exception as e:
+                    print(f"⚠️ Error aplicando sombra de texto en marquesina: {e}")
             
             # Recortar espacios vacíos (Crop) para que el clip sea del tamaño exacto del texto
             bbox = txt_img.getbbox()
@@ -346,6 +490,100 @@ class RenderEngine:
 
         except Exception as e:
             print(f"⚠️ Error creando marquesina: {e}")
+            return None
+
+    def _create_video_overlay_clip(self, el: Dict[str, Any], duration: float):
+        """
+        Crea un clip de video superpuesto (picture-in-picture) similar a una imagen,
+        respetando posicion, size, transparencia, radius y margin.
+        """
+        try:
+            content = str(el.get("contenido", el.get("video", el.get("url", "")))).strip()
+            if not content:
+                print("⚠️ Elemento 'video' sin campo 'contenido'.")
+                return None
+
+            try:
+                clip = VideoFileClip(content)
+            except Exception as e:
+                print(f"⚠️ Error abriendo video overlay {content}: {e}")
+                return None
+
+            try:
+                max_dur = duration
+                try:
+                    if clip.duration:
+                        max_dur = min(duration, clip.duration)
+                except Exception:
+                    pass
+                clip = clip.subclip(0, max_dur)
+
+                target_size = self._parse_coords(str(el.get("size", "0,0")))
+                if target_size[0] > 0 and target_size[1] > 0:
+                    clip = clip.resize(newsize=(target_size[0], target_size[1]))
+
+                base_pos = self._parse_coords(str(el.get("posicion", "0,0")))
+                pos = self._apply_margin(base_pos, el)
+                clip = clip.set_position(pos)
+
+                opacity = 1.0
+                if "opacity" in el:
+                    try:
+                        opacity = float(el.get("opacity", 1.0))
+                    except Exception:
+                        opacity = 1.0
+                elif "transparencia" in el:
+                    try:
+                        transparencia = float(el.get("transparencia", 0.0))
+                        opacity = max(0.0, min(1.0, 1.0 - transparencia))
+                    except Exception:
+                        opacity = 1.0
+                if opacity < 1.0:
+                    clip = clip.set_opacity(opacity)
+
+                radius_raw = el.get("radius", 0)
+                radius, corners = self._parse_radius(radius_raw)
+                w = int(clip.w)
+                h = int(clip.h)
+                mask_img = None
+                if radius > 0:
+                    mask_img = Image.new("L", (w, h), 0)
+                    draw_mask = ImageDraw.Draw(mask_img)
+                    draw_mask.rounded_rectangle((0, 0, w, h), radius=radius, corners=corners, fill=255)
+                    mask_clip = ImageClip(np.array(mask_img) / 255.0, ismask=True).set_duration(clip.duration)
+                    clip = clip.set_mask(mask_clip)
+
+                # Sombra opcional para video
+                sombra = self._parse_shadow(el)
+                if sombra:
+                    blur, dx, dy, color_rgba = sombra
+                    try:
+                        if mask_img is None:
+                            mask_img = Image.new("L", (w, h), 255)
+                        shadow_mask = mask_img.copy()
+                        if blur > 0:
+                            shadow_mask = shadow_mask.filter(ImageFilter.GaussianBlur(blur))
+                        shadow_rgba = Image.new("RGBA", (w, h), color_rgba)
+                        shadow_rgba.putalpha(shadow_mask)
+                        shadow_clip = ImageClip(np.array(shadow_rgba)).set_duration(clip.duration).set_pos((dx, dy))
+                        # Componer sombra + video en un contenedor del tamaño del video
+                        composed = CompositeVideoClip([shadow_clip, clip.set_pos((0, 0))], size=(w, h)).set_pos(pos)
+                        return composed
+                    except Exception as e:
+                        print(f"⚠️ Sombra video error: {e}")
+
+                return clip
+
+            except Exception as e:
+                print(f"⚠️ Error configurando overlay de video: {e}")
+                try:
+                    clip.close()
+                except Exception:
+                    pass
+                return None
+
+        except Exception as e:
+            print(f"⚠️ Error creando overlay de video: {e}")
             return None
 
     def _render_two_column_text(self, el: Dict[str, Any], draw: ImageDraw.ImageDraw, override_pos: Tuple[int, int] = None) -> None:
@@ -590,15 +828,19 @@ class RenderEngine:
                     current_x += gap
                     continue
 
-                # --- FONDO DE COLUMNA (Nuevo) ---
                 bg_col = col.get("bg_color", col.get("fondo", None))
                 if bg_col:
                     bg_trans = float(col.get("bg_transparencia", col.get("bg_opacity", 0.0)))
                     bg_opacity = max(0.0, min(1.0, 1.0 - bg_trans))
-                    
-                    # El fondo ocupa todo el alto disponible de la fila/contenedor
                     try:
                         bg_img = self._create_fill_image((col_w, h_avail), bg_col, bg_opacity)
+                        radius_raw = col.get("radius", 0)
+                        radius, corners = self._parse_radius(radius_raw)
+                        if radius > 0:
+                            mask = Image.new("L", (col_w, h_avail), 0)
+                            draw_mask = ImageDraw.Draw(mask)
+                            draw_mask.rounded_rectangle((0, 0, col_w, h_avail), radius=radius, corners=corners, fill=255)
+                            bg_img.putalpha(ImageChops.multiply(bg_img.split()[3], mask))
                         img.paste(bg_img, (current_x, y_start), bg_img)
                     except Exception as e:
                         print(f"⚠️ Error renderizando fondo columna {i}: {e}")
@@ -670,46 +912,115 @@ class RenderEngine:
             print(f"⚠️ Error renderizando texto varias columnas: {e}")
 
     def _create_fill_image(self, size: Tuple[int, int], color_def: Any, opacity: float = 1.0) -> Image.Image:
-        """
-        Crea una imagen de relleno (sólido o degradado).
-        """
         w, h = size
-        if w <= 0 or h <= 0: return Image.new("RGBA", (1, 1), (0,0,0,0))
-        
-        # 1. Generar imagen base (Sólida o Gradiente)
-        if isinstance(color_def, dict) and color_def.get("tipo") == "linear":
-            # Renderizar degradado
+        if w <= 0 or h <= 0:
+            return Image.new("RGBA", (1, 1), (0, 0, 0, 0))
+        if isinstance(color_def, dict) and str(color_def.get("tipo", "")).lower() in ["linear", "lineal"]:
             colors = color_def.get("colores", ["#FFFFFF", "#000000"])
-            direction = color_def.get("direccion", "vertical").lower()
-            
-            # Convertir colores a RGB
+            if not isinstance(colors, (list, tuple)) or len(colors) < 2:
+                colors = ["#FFFFFF", "#000000"]
             c1 = self._hex_to_rgb(colors[0])
             c2 = self._hex_to_rgb(colors[1])
-            
-            # Crear imagen pequeña 1x2 o 2x1 y escalar
-            if direction in ["vertical", "v"]:
-                base = Image.new("RGBA", (1, 2))
-                base.putpixel((0, 0), c1)
-                base.putpixel((0, 1), c2)
+            direction = str(color_def.get("direccion", "")).lower()
+            angle_raw = color_def.get("angulo", color_def.get("angle", None))
+            angle = None
+            if angle_raw is not None:
+                try:
+                    angle = float(angle_raw) % 360.0
+                except:
+                    angle = None
+            if angle is None:
+                if direction in ["vertical", "v"]:
+                    angle = 90.0
+                elif direction in ["horizontal", "h"]:
+                    angle = 0.0
+                else:
+                    angle = 0.0
+
+            mid_raw = color_def.get("punto_medio", color_def.get("mid", None))
+            mid = 1.0
+            if mid_raw is not None:
+                try:
+                    mid = float(mid_raw)
+                    if mid > 1.0:
+                        mid = mid / 100.0
+                except:
+                    mid = 1.0
+            if mid < 0.0:
+                mid = 0.0
+            if mid > 1.0:
+                mid = 1.0
+
+            def _mix_channel(v1: int, v2: int, t: float) -> int:
+                return int(v1 + (v2 - v1) * t)
+
+            def _t_with_mid(t: float) -> float:
+                t = max(0.0, min(1.0, t))
+                if mid >= 1.0 or mid <= 0.0:
+                    return t
+                if t <= mid:
+                    return 0.0
+                return (t - mid) / (1.0 - mid)
+
+            if angle % 180 in [0.0] or abs(angle % 180.0) < 1e-6:
+                length = max(w, 2)
+                base = Image.new("RGBA", (length, 1))
+                for x in range(length):
+                    if length > 1:
+                        t = x / (length - 1)
+                    else:
+                        t = 0.0
+                    t2 = _t_with_mid(t)
+                    r = _mix_channel(c1[0], c2[0], t2)
+                    g = _mix_channel(c1[1], c2[1], t2)
+                    b = _mix_channel(c1[2], c2[2], t2)
+                    a = _mix_channel(c1[3], c2[3], t2)
+                    base.putpixel((x, 0), (r, g, b, a))
                 img = base.resize((w, h), resample=Image.Resampling.BICUBIC)
-            else: # horizontal
-                base = Image.new("RGBA", (2, 1))
-                base.putpixel((0, 0), c1)
-                base.putpixel((1, 0), c2)
+            elif angle % 180 in [90.0] or abs((angle % 180.0) - 90.0) < 1e-6:
+                length = max(h, 2)
+                base = Image.new("RGBA", (1, length))
+                for y in range(length):
+                    if length > 1:
+                        t = y / (length - 1)
+                    else:
+                        t = 0.0
+                    t2 = _t_with_mid(t)
+                    r = _mix_channel(c1[0], c2[0], t2)
+                    g = _mix_channel(c1[1], c2[1], t2)
+                    b = _mix_channel(c1[2], c2[2], t2)
+                    a = _mix_channel(c1[3], c2[3], t2)
+                    base.putpixel((0, y), (r, g, b, a))
                 img = base.resize((w, h), resample=Image.Resampling.BICUBIC)
-                
+            else:
+                diag = int(math.hypot(w, h))
+                if diag < 2:
+                    diag = 2
+                base = Image.new("RGBA", (diag, 1))
+                for x in range(diag):
+                    if diag > 1:
+                        t = x / (diag - 1)
+                    else:
+                        t = 0.0
+                    t2 = _t_with_mid(t)
+                    r = _mix_channel(c1[0], c2[0], t2)
+                    g = _mix_channel(c1[1], c2[1], t2)
+                    b = _mix_channel(c1[2], c2[2], t2)
+                    a = _mix_channel(c1[3], c2[3], t2)
+                    base.putpixel((x, 0), (r, g, b, a))
+                square = base.resize((diag, diag), resample=Image.Resampling.BILINEAR)
+                rot = square.rotate(angle, resample=Image.Resampling.BICUBIC, expand=True)
+                cx = (rot.width - w) // 2
+                cy = (rot.height - h) // 2
+                img = rot.crop((cx, cy, cx + w, cy + h))
         else:
-            # Color sólido
             color_hex = str(color_def) if color_def else "#FFFFFF"
             color_rgba = self._hex_to_rgb(color_hex)
             img = Image.new("RGBA", size, color_rgba)
-            
-        # 2. Aplicar Opacidad Global
         if opacity < 1.0:
             r, g, b, a = img.split()
             a = a.point(lambda p: int(p * opacity))
             img = Image.merge("RGBA", (r, g, b, a))
-            
         return img
 
     def _draw_text_advanced(self, draw, pos, text, font, fill, align="left", 
@@ -882,37 +1193,65 @@ class RenderEngine:
                     if not content: continue
                     
                     try:
-                        # Cargar imagen para saber tamaño
-                        if content.startswith("http"):
-                             # Usamos download_file para robustez (fallback curl)
-                             try:
-                                 # Intentar deducir extensión
-                                 ext = ".png"
-                                 if "." in content.split("/")[-1]:
-                                     ext = os.path.splitext(content.split("/")[-1])[1]
-                                     if "?" in ext: ext = ext.split("?")[0]
-                                 
-                                 temp_path = download_file(content, suffix=ext)
-                                 temp_img = Image.open(temp_path).convert("RGBA")
-                                 temp_img.load() # Forzar carga en memoria
-                                 try:
-                                     os.remove(temp_path)
-                                 except:
-                                     pass
-                             except Exception as e:
-                                 print(f"⚠️ Error descargando imagen {content}: {e}")
-                                 continue
-                        else:
-                             if os.path.exists(content):
-                                 temp_img = Image.open(content).convert("RGBA")
-                             else:
-                                 print(f"⚠️ Imagen no encontrada: {content}")
-                                 continue
-                        
-                        # Redimensionar si se pide
+                        # Preparar tamaño objetivo antes de cargar (para rasterizar SVG a ese tamaño si se puede)
                         target_size = self._parse_coords(el.get("size", "0,0"))
-                        if target_size[0] > 0 and target_size[1] > 0:
-                            temp_img = temp_img.resize(target_size, Image.Resampling.LANCZOS)
+                        target_w = target_size[0]
+                        target_h = target_size[1]
+
+                        src_path = None
+                        ext_lower = ""
+                        if content.startswith("http"):
+                            try:
+                                ext_lower = ".png"
+                                if "." in content.split("/")[-1]:
+                                    ext_lower = os.path.splitext(content.split("/")[-1])[1]
+                                    if "?" in ext_lower: ext_lower = ext_lower.split("?")[0]
+                                ext_lower = (ext_lower or ".png").lower()
+                                
+                                temp_path = download_file(content, suffix=ext_lower)
+                                src_path = temp_path
+                            except Exception as e:
+                                print(f"⚠️ Error descargando imagen {content}: {e}")
+                                continue
+                        else:
+                            if os.path.exists(content):
+                                src_path = content
+                                ext_lower = os.path.splitext(content)[1].lower()
+                            else:
+                                print(f"⚠️ Imagen no encontrada: {content}")
+                                continue
+
+                        # Si es SVG, rasterizar primero
+                        cleanup_src = False
+                        try:
+                            if ext_lower in [".svg", ".svgz"]:
+                                png_path = self._rasterize_svg(src_path, out_w=target_w if target_w > 0 else None, out_h=target_h if target_h > 0 else None)
+                                if png_path:
+                                    temp_img = Image.open(png_path).convert("RGBA")
+                                    temp_img.load()
+                                    try:
+                                        os.remove(png_path)
+                                    except:
+                                        pass
+                                else:
+                                    print("⚠️ No se pudo rasterizar el SVG, se omitirá el elemento.")
+                                    # limpiar temp descargado si aplica
+                                    if content.startswith("http") and src_path and os.path.exists(src_path):
+                                        os.remove(src_path)
+                                    continue
+                            else:
+                                # Raster (png/jpg/etc)
+                                temp_img = Image.open(src_path).convert("RGBA")
+                                temp_img.load()
+                        finally:
+                            # Eliminar archivo descargado temporal si vino por HTTP
+                            if content.startswith("http") and src_path and os.path.exists(src_path):
+                                try: os.remove(src_path)
+                                except: pass
+                        
+                        # Redimensionar si se pide (si no se hizo al rasterizar)
+                        if target_w > 0 and target_h > 0:
+                            temp_img = temp_img.resize((target_w, target_h), Image.Resampling.LANCZOS)
                         
                         obj_w, obj_h = temp_img.size
                         
@@ -1047,8 +1386,9 @@ class RenderEngine:
                     # y1 += pt
                     w_eff = obj_w # - (pl + pr)
                     h_eff = obj_h # - (pt + pb)
-                    
                     if w_eff > 0 and h_eff > 0:
+                        sombra = self._parse_shadow(el)
+
                         # 2. Calcular opacidad desde 'transparencia' (0.0 visible -> 1.0 invisible)
                         # Fallback a 'opacity' legacy si existe
                         transparencia = float(el.get("transparencia", 0.0))
@@ -1070,6 +1410,32 @@ class RenderEngine:
                             draw_mask.rounded_rectangle((0, 0, w_eff, h_eff), radius=radius, corners=corners, fill=255)
                             # Aplicar máscara al alpha del fill_img
                             fill_img.putalpha(ImageChops.multiply(fill_img.split()[3], mask))
+
+                        # 4b. Sombra opcional (misma forma, desplazada y difuminada)
+                        if sombra:
+                            blur, dx, dy, color_rgba = sombra
+                            pad = max(int(blur), 0)
+                            sw = w_eff + 2 * pad
+                            sh = h_eff + 2 * pad
+                            shadow_mask = Image.new("L", (sw, sh), 0)
+                            shadow_draw = ImageDraw.Draw(shadow_mask)
+                            if radius > 0:
+                                shadow_draw.rounded_rectangle(
+                                    (pad, pad, pad + w_eff, pad + h_eff),
+                                    radius=radius,
+                                    corners=corners,
+                                    fill=255
+                                )
+                            else:
+                                shadow_draw.rectangle(
+                                    (pad, pad, pad + w_eff, pad + h_eff),
+                                    fill=255
+                                )
+                            if blur > 0:
+                                shadow_mask = shadow_mask.filter(ImageFilter.GaussianBlur(blur))
+                            shadow_img = Image.new("RGBA", (sw, sh), color_rgba)
+                            shadow_img.putalpha(shadow_mask)
+                            img.paste(shadow_img, (x1 + dx - pad, y1 + dy - pad), shadow_img)
                         
                         # 5. Pegar en canvas
                         img.paste(fill_img, (x1, y1), fill_img)
@@ -1085,6 +1451,8 @@ class RenderEngine:
                     h_eff = obj_h
                     
                     if w_eff > 0 and h_eff > 0:
+                        sombra = self._parse_shadow(el)
+
                         # 2. Calcular opacidad
                         transparencia = float(el.get("transparencia", 0.0))
                         if "opacity" in el:
@@ -1099,12 +1467,24 @@ class RenderEngine:
                         draw_mask = ImageDraw.Draw(mask)
                         draw_mask.ellipse((0, 0, w_eff, h_eff), fill=255)
                         
+                        # Sombra opcional para círculo
+                        if sombra:
+                            blur, dx, dy, color_rgba = sombra
+                            shadow_mask = mask.copy()
+                            if blur > 0:
+                                shadow_mask = shadow_mask.filter(ImageFilter.GaussianBlur(blur))
+                            shadow_img = Image.new("RGBA", (w_eff, h_eff), color_rgba)
+                            shadow_img.putalpha(shadow_mask)
+                            img.paste(shadow_img, (x1 + dx, y1 + dy), shadow_img)
+
                         # 5. Aplicar máscara y pegar
                         fill_img.putalpha(ImageChops.multiply(fill_img.split()[3], mask))
                         img.paste(fill_img, (x1, y1), fill_img)
 
                 elif etype in ["imagen", "image"]:
                     if temp_img:
+                        sombra = self._parse_shadow(el)
+
                         # Opacidad
                         opacity = float(el.get("opacity", 1.0))
                         if opacity < 1.0:
@@ -1123,6 +1503,17 @@ class RenderEngine:
                             existing_alpha = temp_img.split()[3]
                             final_alpha = ImageChops.multiply(existing_alpha, mask)
                             temp_img.putalpha(final_alpha)
+
+                        # Sombra opcional basándose en el alpha de la imagen
+                        if sombra:
+                            blur, dx, dy, color_rgba = sombra
+                            alpha_img = temp_img.split()[3]
+                            shadow_mask = alpha_img.copy()
+                            if blur > 0:
+                                shadow_mask = shadow_mask.filter(ImageFilter.GaussianBlur(blur))
+                            shadow_img = Image.new("RGBA", temp_img.size, color_rgba)
+                            shadow_img.putalpha(shadow_mask)
+                            img.paste(shadow_img, (pos[0] + dx, pos[1] + dy), shadow_img)
 
                         img.paste(temp_img, pos, temp_img)
 
@@ -1211,23 +1602,48 @@ class RenderEngine:
                         radius_raw = el.get("radius", 0) # Custom prop 'radius' mapped to root
                         radius, corners = self._parse_radius(radius_raw)
                         
+                        sombra = self._parse_shadow(el)
+                        mask = None
                         if radius > 0:
                             mask = Image.new("L", (int(bg_w), int(bg_h)), 0)
                             draw_mask = ImageDraw.Draw(mask)
                             draw_mask.rounded_rectangle((0, 0, int(bg_w), int(bg_h)), radius=radius, corners=corners, fill=255)
                             fill_img.putalpha(ImageChops.multiply(fill_img.split()[3], mask))
-                        
+                        # Sombra de fondo de texto (rectangular redondeado)
+                        if sombra:
+                            blur, dx, dy, color_rgba = sombra
+                            if mask is None:
+                                shadow_mask = Image.new("L", (int(bg_w), int(bg_h)), 255)
+                            else:
+                                shadow_mask = mask.copy()
+                            if blur > 0:
+                                shadow_mask = shadow_mask.filter(ImageFilter.GaussianBlur(blur))
+                            base_alpha = 255
+                            if isinstance(color_rgba, tuple) and len(color_rgba) == 4:
+                                base_alpha = color_rgba[3]
+                            if base_alpha < 255:
+                                factor = max(0.0, min(1.0, base_alpha / 255.0))
+                                shadow_mask = shadow_mask.point(lambda p: int(p * factor))
+                            shadow_img = Image.new("RGBA", (int(bg_w), int(bg_h)), color_rgba)
+                            shadow_img.putalpha(shadow_mask)
+                            img.paste(shadow_img, (int(bg_x) + dx, int(bg_y) + dy), shadow_img)
+
                         img.paste(fill_img, (int(bg_x), int(bg_y)), fill_img)
 
                     # 4. Renderizar Texto
                     align = el.get("alineacion", "left").lower()
                     
-                    # Ajuste de alineación heredado
-                    if "center" not in parts[0] and align == "center":
-                        # Legacy adjustment
-                        x = x - (obj_w // 2)
-                    elif "center" not in parts[0] and align == "right":
-                        x = x - obj_w
+                    # Definir ancla de dibujo coherente con _draw_text_advanced:
+                    # - _draw_text_advanced interpreta pos.x como:
+                    #     left-anchor si align=='left'
+                    #     center-anchor si align=='center'
+                    #     right-anchor si align=='right'
+                    # Aquí convertimos la posición base (x,y) en la ancla correcta.
+                    if "center" in parts[0]:
+                        x = x + (obj_w / 2)
+                    elif "right" in parts[0]:
+                        x = x + obj_w
+                    # Si es 'left' o numérico, x ya es ancla izquierda
                     
                     # Borde (Stroke)
                     stroke_width = s(int(el.get("borde_grosor", 0)))
@@ -1235,14 +1651,46 @@ class RenderEngine:
                     if stroke_width > 0:
                         stroke_fill = self._hex_to_rgb(el.get("borde_color", "#000000"))
                     
-                    self._draw_text_advanced(
-                        draw, (x, y), temp_content, temp_font, color, 
-                        align=align, # pasamos align para que _draw_text_advanced lo maneje
-                        line_spacing=line_spacing,
-                        tracking=tracking,
-                        stroke_width=stroke_width,
-                        stroke_fill=stroke_fill
-                    )
+                    sombra = self._parse_shadow(el)
+                    if sombra:
+                        # Renderizado sobre imagen temporal para generar sombra de glifos
+                        tw = max(1, int(max_text_w))
+                        th = max(1, int(total_text_h))
+                        txt_img = Image.new('RGBA', (tw, th), (0, 0, 0, 0))
+                        draw_txt = ImageDraw.Draw(txt_img)
+                        # Nota: usamos align="left" dentro del buffer local; ya ajustamos X por alineación
+                        self._draw_text_advanced(
+                            draw_txt, (0, 0), temp_content, temp_font, color,
+                            align="left",
+                            line_spacing=line_spacing,
+                            tracking=tracking,
+                            stroke_width=stroke_width,
+                            stroke_fill=stroke_fill
+                        )
+                        blur, dx, dy, color_rgba = sombra
+                        alpha_txt = txt_img.split()[3]
+                        shadow_mask = alpha_txt.copy()
+                        if blur > 0:
+                            shadow_mask = shadow_mask.filter(ImageFilter.GaussianBlur(blur))
+                        base_alpha = 255
+                        if isinstance(color_rgba, tuple) and len(color_rgba) == 4:
+                            base_alpha = color_rgba[3]
+                        if base_alpha < 255:
+                            factor = max(0.0, min(1.0, base_alpha / 255.0))
+                            shadow_mask = shadow_mask.point(lambda p: int(p * factor))
+                        shadow_rgba = Image.new("RGBA", (tw, th), color_rgba)
+                        shadow_rgba.putalpha(shadow_mask)
+                        img.paste(shadow_rgba, (int(x) + dx, int(y) + dy), shadow_rgba)
+                        img.paste(txt_img, (int(x), int(y)), txt_img)
+                    else:
+                        self._draw_text_advanced(
+                            draw, (x, y), temp_content, temp_font, color, 
+                            align=align, # pasamos align para que _draw_text_advanced lo maneje
+                            line_spacing=line_spacing,
+                            tracking=tracking,
+                            stroke_width=stroke_width,
+                            stroke_fill=stroke_fill
+                        )
 
                 elif etype == "texto_dos_columnas":
                     self._render_two_column_text(el, draw, override_pos=pos)
@@ -1266,6 +1714,9 @@ class RenderEngine:
             if etype == 'marquesina':
                 mc = self._create_marquee_clip(el, duration)
                 if mc: dynamic_clips.append(mc)
+            elif etype == 'video':
+                vc = self._create_video_overlay_clip(el, duration)
+                if vc: dynamic_clips.append(vc)
             else:
                 static_elements.append(el)
         
@@ -1362,6 +1813,66 @@ def process_dynamic_layers(layout_data: Dict[str, Any], duration: float, uploade
         block_duration = max(0.0, block_end - block_start)
         if block_duration <= 0:
             continue
+
+        # Sombra a nivel de bloque (alrededor del primer elemento) si meta contiene 'sombra'
+        try:
+            sombra_def = None
+            if isinstance(meta, dict):
+                sombra_def = meta.get("sombra")
+            if sombra_def and elements:
+                first = elements[0]
+                # Dimensiones del primer elemento
+                size_str = str(first.get("size", "0,0"))
+                w, h = engine._parse_coords(size_str)
+                if w > 0 and h > 0:
+                    # Posición relativa al canvas (primer elemento)
+                    pos_str = str(first.get("posicion", "0,0")).lower()
+                    parts = [p.strip() for p in pos_str.split(",")]
+                    if len(parts) == 1:
+                        parts.append(parts[0])
+                    # X
+                    if "center" in parts[0]:
+                        x = (engine.canvas_w - w) // 2
+                    elif "right" in parts[0]:
+                        x = engine.canvas_w - w
+                    elif "left" in parts[0]:
+                        x = 0
+                    else:
+                        x = engine._parse_value(parts[0], engine.canvas_w)
+                    # Y
+                    if "center" in parts[1]:
+                        y = (engine.canvas_h - h) // 2
+                    elif "bottom" in parts[1]:
+                        y = engine.canvas_h - h
+                    elif "top" in parts[1]:
+                        y = 0
+                    else:
+                        y = engine._parse_value(parts[1], engine.canvas_h)
+                    # Margen
+                    x, y = engine._apply_margin((x, y), first)
+                    # Radio
+                    radius_raw = first.get("radius", 0)
+                    radius, corners = engine._parse_radius(radius_raw)
+                    # Parse sombra
+                    blur, dx, dy, color_rgba = engine._parse_shadow({"sombra": sombra_def})
+                    # Construir sombra
+                    mask = Image.new("L", (int(w), int(h)), 0)
+                    dmask = ImageDraw.Draw(mask)
+                    if radius > 0:
+                        dmask.rounded_rectangle((0, 0, int(w), int(h)), radius=radius, corners=corners, fill=255)
+                    else:
+                        dmask.rectangle((0, 0, int(w), int(h)), fill=255)
+                    if blur > 0:
+                        mask = mask.filter(ImageFilter.GaussianBlur(blur))
+                    shadow_rgba = Image.new("RGBA", (int(w), int(h)), color_rgba)
+                    shadow_rgba.putalpha(mask)
+                    shadow_clip = ImageClip(np.array(shadow_rgba)).set_duration(block_duration).set_pos((int(x) + dx, int(y) + dy))
+                    if clips:
+                        clips.insert(0, shadow_clip)
+                    else:
+                        clips = [shadow_clip]
+        except Exception as e:
+            print(f"⚠️ Sombra de bloque error: {e}")
 
         fade_in = efecto_inicio == "fade"
         fade_out = efecto_fin == "fade"
