@@ -756,13 +756,8 @@
             <div id="render-status" style="margin-bottom: 15px; color: #bbb;">Generando…</div>
             <div id="render-video-wrap" style="display: none;">
                 <video id="render-video" controls style="width: 100%; max-height: 60vh; background: #000;"></video>
-                <div style="margin-top: 10px; display:flex; justify-content:flex-end; gap:8px;">
-                    <button id="render-video-download" class="btn" title="Descargar archivo de video">
-                        <i class="fas fa-download"></i> Descargar video
-                    </button>
-                    <a id="render-video-link" href="#" target="_blank" class="btn btn-secondary" style="text-decoration:none;">
-                        <i class="fas fa-external-link-alt"></i> Abrir en nueva pestaña
-                    </a>
+                <div style="margin-top: 10px; text-align: right;">
+                    <a id="render-video-link" href="#" target="_blank" style="color: #9cf; text-decoration: underline;">Abrir en nueva pestaña</a>
                 </div>
             </div>
             <pre id="render-error" style="display: none; background: #111; color: #f88; border: 1px solid #333; padding: 15px; border-radius: 6px; max-height: 60vh; overflow: auto;"></pre>
@@ -1112,43 +1107,6 @@
 
         // --- REMOTE RENDER (GENERAR) ---
         let lastRenderBlobUrl = null;
-        let currentRenderUrl = null;
-        function getSuggestedFilename() {
-            const name = document.getElementById('conf-nombre')?.value || 'render_remoto.mp4';
-            return name.endsWith('.mp4') ? name : (name + '.mp4');
-        }
-        function downloadRenderedVideo() {
-            const url = currentRenderUrl;
-            if (!url) return;
-            const filename = getSuggestedFilename();
-            // Si es blob local, descargar directo
-            if (url.startsWith('blob:')) {
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = filename;
-                document.body.appendChild(a);
-                a.click();
-                a.remove();
-                return;
-            }
-            // Intentar fetch y descargar como blob (maneja CORS si el servidor lo permite)
-            fetch(url)
-                .then(r => r.blob())
-                .then(blob => {
-                    const blobUrl = URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = blobUrl;
-                    a.download = filename;
-                    document.body.appendChild(a);
-                    a.click();
-                    a.remove();
-                    setTimeout(() => URL.revokeObjectURL(blobUrl), 2000);
-                })
-                .catch(() => {
-                    // Fallback: abrir en nueva pestaña (el usuario puede guardar desde allí)
-                    window.open(url, '_blank');
-                });
-        }
         function openRenderModalLoading() {
             const modal = document.getElementById('render-modal');
             const fab = document.getElementById('render-modal-toggle-fab');
@@ -1167,16 +1125,11 @@
             const modal = document.getElementById('render-modal');
             const videoElOut = document.getElementById('render-video');
             const linkEl = document.getElementById('render-video-link');
-            const dlBtn = document.getElementById('render-video-download');
             document.getElementById('render-status').style.display = 'none';
             document.getElementById('render-error').style.display = 'none';
             document.getElementById('render-video-wrap').style.display = 'block';
             videoElOut.src = url;
             linkEl.href = url;
-            currentRenderUrl = url;
-            if (dlBtn) {
-                dlBtn.onclick = downloadRenderedVideo;
-            }
             if (!renderModalHidden) {
                 modal.style.display = 'flex';
             }
@@ -1524,30 +1477,8 @@
 
             addPropInput(geomGrid, 'X', Math.round(obj.left), (v) => { obj.set('left', parseInt(v)); canvas.requestRenderAll(); });
             addPropInput(geomGrid, 'Y', Math.round(obj.top), (v) => { obj.set('top', parseInt(v)); canvas.requestRenderAll(); });
-            addPropInput(geomGrid, 'W', (obj.width * obj.scaleX).toFixed(0), (v) => { 
-                const newW = parseInt(v);
-                if (!isNaN(newW)) {
-                    obj.scaleToWidth(newW); 
-                    if ((obj.elementType === 'rectangulo' || obj.type === 'rect')) {
-                        if (!obj.customProps) obj.customProps = {};
-                        const hVal = Math.round(obj.height * obj.scaleY);
-                        obj.customProps.size = `${newW}, ${hVal}`;
-                    }
-                }
-                canvas.requestRenderAll(); 
-            });
-            addPropInput(geomGrid, 'H', (obj.height * obj.scaleY).toFixed(0), (v) => { 
-                const newH = parseInt(v);
-                if (!isNaN(newH)) {
-                    obj.scaleToHeight(newH); 
-                    if ((obj.elementType === 'rectangulo' || obj.type === 'rect')) {
-                        if (!obj.customProps) obj.customProps = {};
-                        const wVal = Math.round(obj.width * obj.scaleX);
-                        obj.customProps.size = `${wVal}, ${newH}`;
-                    }
-                }
-                canvas.requestRenderAll(); 
-            });
+            addPropInput(geomGrid, 'W', (obj.width * obj.scaleX).toFixed(0), (v) => { obj.scaleToWidth(parseInt(v)); canvas.requestRenderAll(); });
+            addPropInput(geomGrid, 'H', (obj.height * obj.scaleY).toFixed(0), (v) => { obj.scaleToHeight(parseInt(v)); canvas.requestRenderAll(); });
 
             // 2.1 Margin (X, Y) - disponible para todos los elementos
             const marginRow = document.createElement('div');
@@ -2030,131 +1961,7 @@
                 });
             }
 
-            if (obj.type === 'rect') {
-                const rectGroup = addGroupHeader(root, 'Fondo Rectángulo');
-                const body = document.createElement('div');
-                body.className = 'prop-card-body';
-                rectGroup.appendChild(body);
-
-                const currentColorProp = (obj.customProps && obj.customProps.color) || obj.fill || '#000000';
-                const isGradient = typeof currentColorProp === 'object' && currentColorProp && (currentColorProp.tipo === 'linear' || currentColorProp.tipo === 'lineal');
-
-                function hexToRgbA(h) {
-                    if (!h || typeof h !== 'string') return { color: '#000000', opacity: 1 };
-                    let hex = h.replace('#', '').trim();
-                    if (hex.length === 3) hex = hex.split('').map(c => c + c).join('');
-                    let a = 255;
-                    if (hex.length === 8) {
-                        a = parseInt(hex.slice(6, 8), 16);
-                        hex = hex.slice(0, 6);
-                    }
-                    const r = parseInt(hex.slice(0, 2), 16);
-                    const g = parseInt(hex.slice(2, 4), 16);
-                    const b = parseInt(hex.slice(4, 6), 16);
-                    const opacity = Math.max(0, Math.min(1, a / 255));
-                    const color = '#' + hex.toUpperCase();
-                    return { color, opacity, r, g, b };
-                }
-
-                function buildGradient(obj, gdef) {
-                    const c1 = gdef.colores[0] || '#FFFFFFFF';
-                    const c2 = gdef.colores[1] || '#FFFFFF00';
-                    const angleDeg = gdef.angulo || 0;
-                    let mid = gdef.punto_medio;
-                    if (mid === undefined || mid === null || isNaN(parseFloat(mid))) {
-                        mid = 100;
-                    }
-                    mid = parseFloat(mid);
-                    if (mid > 1) mid = mid / 100;
-                    if (mid < 0) mid = 0;
-                    if (mid > 1) mid = 1;
-
-                    const a = (parseFloat(angleDeg) || 0) * Math.PI / 180;
-                    const vx = Math.cos(a), vy = Math.sin(a);
-                    const cx = 0.5, cy = 0.5;
-                    function tToEdge(px, pv) {
-                        if (pv > 0) return (1 - px) / pv;
-                        if (pv < 0) return (0 - px) / pv;
-                        return Infinity;
-                    }
-                    const tPos = Math.min(tToEdge(cx, vx), tToEdge(cy, vy));
-                    const tNeg = Math.min(tToEdge(1 - cx, -vx), tToEdge(1 - cy, -vy));
-                    const x1 = cx - vx * tNeg;
-                    const y1 = cy - vy * tNeg;
-                    const x2 = cx + vx * tPos;
-                    const y2 = cy + vy * tPos;
-
-                    const s1 = hexToRgbA(c1);
-                    const s2 = hexToRgbA(c2);
-                    const midOffset = Math.max(0, Math.min(1, mid));
-                    const gradient = new fabric.Gradient({
-                        type: 'linear',
-                        gradientUnits: 'percentage',
-                        coords: { x1, y1, x2, y2 },
-                        colorStops: [
-                            { offset: 0, color: s1.color, opacity: s1.opacity },
-                            { offset: midOffset, color: s1.color, opacity: s1.opacity },
-                            { offset: 1, color: s2.color, opacity: s2.opacity }
-                        ]
-                    });
-                    obj.set('fill', gradient);
-                    canvas.requestRenderAll();
-                }
-
-                const mode = isGradient ? 'degradado' : 'solido';
-                addPropSelect(body, 'Modo Fondo', mode, ['solido', 'degradado'], (v) => {
-                    if (!obj.customProps) obj.customProps = {};
-                    if (v === 'solido') {
-                        const solid = (obj.customProps && obj.customProps.color && typeof obj.customProps.color === 'string') ? obj.customProps.color : '#000000';
-                        obj.customProps.color = solid;
-                        obj.set('fill', solid);
-                        canvas.requestRenderAll();
-                        renderProperties(obj);
-                    } else {
-                        const g = (obj.customProps && typeof obj.customProps.color === 'object') ? obj.customProps.color : { tipo: 'linear', colores: ['#FFFFFFFF', '#FFFFFF00'], angulo: 0, punto_medio: 100 };
-                        obj.customProps.color = g;
-                        buildGradient(obj, g);
-                        renderProperties(obj);
-                    }
-                });
-
-                if (!obj.customProps) obj.customProps = {};
-                if (typeof obj.customProps.color === 'undefined') {
-                    obj.customProps.color = isGradient ? currentColorProp : (typeof currentColorProp === 'string' ? currentColorProp : '#000000');
-                }
-
-                const isGradNow = typeof obj.customProps.color === 'object' && obj.customProps.color && (obj.customProps.color.tipo === 'linear' || obj.customProps.color.tipo === 'lineal');
-                if (isGradNow) {
-                    const g = obj.customProps.color;
-                    addPropColor(body, 'Color 1', g.colores[0] || '#FFFFFFFF', (v) => {
-                        obj.customProps.color.colores[0] = v;
-                        buildGradient(obj, obj.customProps.color);
-                    });
-                    addPropColor(body, 'Color 2', g.colores[1] || '#FFFFFF00', (v) => {
-                        obj.customProps.color.colores[1] = v;
-                        buildGradient(obj, obj.customProps.color);
-                    });
-                    addPropInput(body, 'Ángulo (°)', g.angulo || 0, (v) => {
-                        const ang = parseFloat(v) || 0;
-                        obj.customProps.color.angulo = ang;
-                        buildGradient(obj, obj.customProps.color);
-                    });
-                    addPropRange(body, 'Punto medio (%)', g.punto_medio != null ? g.punto_medio : 100, 0, 100, 1, (v) => {
-                        if (!obj.customProps) obj.customProps = {};
-                        const num = parseFloat(v);
-                        obj.customProps.color.punto_medio = isNaN(num) ? 100 : num;
-                        buildGradient(obj, obj.customProps.color);
-                    });
-                    // Aplicar preview si aún no se ha aplicado
-                    buildGradient(obj, g);
-                } else {
-                    addPropColor(body, 'Color Relleno', (typeof obj.customProps.color === 'string' ? obj.customProps.color : (obj.fill || '#000000')), (v) => {
-                        obj.customProps.color = v;
-                        obj.set('fill', v);
-                        canvas.requestRenderAll();
-                    });
-                }
-            } else if (obj.type === 'textbox' || obj.type === 'text') {
+            if (obj.type === 'rect' || obj.type === 'textbox' || obj.type === 'text') {
                  addPropColor(appearanceGroup, 'Color Relleno', obj.fill, (v) => { obj.set('fill', v); canvas.requestRenderAll(); });
             }
             
@@ -2295,25 +2102,13 @@
                         addPropSelect(grid, 'Peso', col.peso || 'bold', ['thin','light','regular','medium','bold','extrabold','black'], (v) => {
                             col.peso = v;
                         });
-                        
-                        addPropInput(grid, 'Borde Grosor', col.borde_grosor != null ? col.borde_grosor : 0, (v) => {
-                            col.borde_grosor = parseInt(v) || 0;
-                        });
-                        
-                        addPropColor(grid, 'Color Borde', col.borde_color || '#FFFFFF', (v) => {
-                            col.borde_color = v;
-                        });
-                        
+
                         addPropColor(card, 'Color Fondo', col.bg_color || '', (v) => {
                             col.bg_color = v;
                         });
 
                         addPropRange(card, 'Transparencia Fondo', col.bg_transparencia != null ? col.bg_transparencia : 0, 0, 1, 0.05, (v) => {
                             col.bg_transparencia = parseFloat(v) || 0;
-                        });
-
-                        addPropInput(card, 'Radius', col.radius || '', (v) => {
-                            col.radius = v;
                         });
 
                         addPropInput(card, 'Texto', col.contenido || '', (v) => {
@@ -2436,7 +2231,6 @@
             let sX = 0;
             let sY = 0;
             let sColor = '#000000';
-            let sAlpha = 100; // 0-100 (%)
             if (obj.customProps && obj.customProps.sombra) {
                 const raw = String(obj.customProps.sombra || '');
                 const parts = raw.split(',').map(p => p.trim());
@@ -2454,46 +2248,15 @@
                 }
                 if (parts[3]) {
                     sColor = parts[3];
-                    if (sColor[0] === '#' && (sColor.length === 9 || sColor.length === 5)) {
-                        const hexAlpha = sColor.length === 9 ? sColor.slice(7, 9) : sColor.slice(4, 5) + sColor.slice(4, 5);
-                        const aInt = parseInt(hexAlpha, 16);
-                        if (!isNaN(aInt)) {
-                            sAlpha = Math.round((aInt / 255) * 100);
-                            if (sAlpha < 0) sAlpha = 0;
-                            if (sAlpha > 100) sAlpha = 100;
-                        }
-                        sColor = '#' + sColor.slice(1, 7);
-                    }
                 }
             }
-            function buildHexWithAlpha() {
-                let base = sColor;
-                if (base[0] === '#') {
-                    if (base.length === 4) {
-                        base = '#' + base[1] + base[1] + base[2] + base[2] + base[3] + base[3];
-                    }
-                    if (base.length === 7) {
-                        if (sAlpha >= 100) {
-                            return base;
-                        }
-                        const alphaInt = Math.round(255 * (sAlpha / 100));
-                        const aa = alphaInt.toString(16).padStart(2, '0');
-                        return base + aa;
-                    }
-                    if (base.length === 9) {
-                        return base;
-                    }
-                }
-                return base;
-            }
-
             function applyFabricShadow() {
                 if (sBlur === 0 && sX === 0 && sY === 0) {
                     obj.set('shadow', null);
                     return;
                 }
                 obj.set('shadow', {
-                    color: buildHexWithAlpha(),
+                    color: sColor,
                     blur: sBlur,
                     offsetX: sX,
                     offsetY: sY
@@ -2501,8 +2264,7 @@
             }
             function updateShadowProp() {
                 if (!obj.customProps) obj.customProps = {};
-                const colorOut = buildHexWithAlpha();
-                obj.customProps.sombra = sBlur + ', ' + sX + ', ' + sY + ', ' + colorOut;
+                obj.customProps.sombra = sBlur + ', ' + sX + ', ' + sY + ', ' + sColor;
                 applyFabricShadow();
                 canvas.requestRenderAll();
             }
@@ -2524,11 +2286,6 @@
             }, false, 'number');
             addPropColor(shadowGroup, 'Color Sombra', sColor, (v) => {
                 sColor = v;
-                updateShadowProp();
-            });
-            addPropInput(shadowGroup, 'Opacidad (%)', sAlpha, (v) => {
-                const n = parseInt(v);
-                sAlpha = isNaN(n) ? 100 : Math.max(0, Math.min(100, n));
                 updateShadowProp();
             });
             
@@ -3088,12 +2845,8 @@
                 if (obj.customProps && obj.customProps.padding) {
                     el.padding = obj.customProps.padding;
                 }
-            } else if (obj.type === 'rect' || obj.elementType === 'rectangulo' || obj.elementType === 'imagen') {
-                if ((obj.elementType === 'rectangulo' || obj.type === 'rect') && obj.customProps && obj.customProps.size) {
-                    el.size = obj.customProps.size;
-                } else {
-                    el.size = `${Math.round(obj.getScaledWidth())}, ${Math.round(obj.getScaledHeight())}`;
-                }
+            } else if (obj.type === 'rect' || obj.elementType === 'imagen') {
+                el.size = `${Math.round(obj.getScaledWidth())}, ${Math.round(obj.getScaledHeight())}`;
             } else if (obj.elementType === 'texto_dos_columnas') {
                 el.size = `${Math.round(obj.getScaledWidth())}, ${Math.round(obj.getScaledHeight())}`;
             } else if (obj.type === 'textbox' || obj.type === 'text') {
@@ -3155,6 +2908,14 @@
                 }
             }
             
+            if (el.tipo === 'texto' || el.tipo === 'marquesina') {
+                el.contenido = obj.text;
+                el.tipografia = obj.fontFamily.toLowerCase();
+                el.peso = WEIGHT_MAP[obj.fontWeight] || 'regular';
+                if (obj.backgroundColor) el.fondo_texto = obj.backgroundColor;
+                if (obj.textAlign) el.alineacion = obj.textAlign;
+            }
+            
             if (el.tipo === 'imagen' || el.tipo === 'video') {
                 let imgUrl = null;
                 if (obj.customProps && obj.customProps.contenido) {
@@ -3187,18 +2948,6 @@
                 // Remove alignment props from root if they conflict (though backend doesn't use alignX/Y directly usually)
                 delete el.alignX;
                 delete el.alignY;
-            }
-            
-            // Es fundamental que el contenido y alineación del texto
-            // reflejen lo que se ve en el canvas. Si en la carga previa
-            // quedaron sombras en customProps (contenido/alineacion),
-            // las sobrescribimos con el estado actual del objeto.
-            if (el.tipo === 'texto' || el.tipo === 'marquesina') {
-                el.contenido = obj.text;
-                el.tipografia = (obj.fontFamily || '').toLowerCase();
-                el.peso = WEIGHT_MAP[obj.fontWeight] || 'regular';
-                if (obj.backgroundColor) el.fondo_texto = obj.backgroundColor;
-                if (obj.textAlign) el.alineacion = obj.textAlign;
             }
             
             return el;
@@ -3280,30 +3029,18 @@
                 const rawX = posParts[0] ? posParts[0].trim().toLowerCase() : '0';
                 const rawY = posParts[1] ? posParts[1].trim().toLowerCase() : '0';
                 
-                if (rawX === 'center') {
-                    left = canvas.width / 2;
-                } else if (rawX === 'left') {
-                    left = 0;
-                } else if (rawX === 'right') {
-                    left = canvas.width;
-                } else if (rawX.endsWith('%')) {
-                    const pctX = parseFloat(rawX.replace('%', ''));
-                    left = isNaN(pctX) ? 0 : (canvas.width * pctX / 100);
-                } else {
+                if (rawX === 'center') left = canvas.width / 2;
+                else if (rawX === 'left') left = 0;
+                else if (rawX === 'right') left = canvas.width;
+                else {
                     const nX = parseInt(rawX);
                     left = isNaN(nX) ? 0 : nX;
                 }
                 
-                if (rawY === 'center') {
-                    top = canvas.height / 2;
-                } else if (rawY === 'top') {
-                    top = 0;
-                } else if (rawY === 'bottom') {
-                    top = canvas.height;
-                } else if (rawY.endsWith('%')) {
-                    const pctY = parseFloat(rawY.replace('%', ''));
-                    top = isNaN(pctY) ? 0 : (canvas.height * pctY / 100);
-                } else {
+                if (rawY === 'center') top = canvas.height / 2;
+                else if (rawY === 'top') top = 0;
+                else if (rawY === 'bottom') top = canvas.height;
+                else {
                     const nY = parseInt(rawY);
                     top = isNaN(nY) ? 0 : nY;
                 }
@@ -3362,117 +3099,28 @@
 
                 obj = new fabric.Rect({
                     left, top, width: w, height: h,
-                    fill: (typeof el.color === 'string') ? el.color : '#000000',
+                    fill: el.color || '#000000',
                     opacity: el.transparencia ? (1 - el.transparencia) : 1,
                     rx, ry
                 });
                 
-                if (!obj.customProps) obj.customProps = {};
-                obj.customProps.size = `${w}, ${h}`;
                 if (customRadius !== null) {
+                    if (!obj.customProps) obj.customProps = {};
                     obj.customProps.radius = customRadius;
-                }
-                if (el.color && typeof el.color === 'object' && (el.color.tipo === 'linear' || el.color.tipo === 'lineal')) {
-                    obj.customProps.color = el.color;
-                    // Aplicar gradiente visual en Fabric
-                    (function applyGrad(o, gdef) {
-                        const deg = gdef.angulo || 0;
-                        let mid = gdef.punto_medio;
-                        if (mid === undefined || mid === null || isNaN(parseFloat(mid))) {
-                            mid = 100;
-                        }
-                        mid = parseFloat(mid);
-                        if (mid > 1) mid = mid / 100;
-                        if (mid < 0) mid = 0;
-                        if (mid > 1) mid = 1;
-
-                        const a = (parseFloat(deg) || 0) * Math.PI / 180;
-                        const vx = Math.cos(a), vy = Math.sin(a);
-                        const cx = 0.5, cy = 0.5;
-                        function tToEdge(px, pv) {
-                            if (pv > 0) return (1 - px) / pv;
-                            if (pv < 0) return (0 - px) / pv;
-                            return Infinity;
-                        }
-                        const tPos = Math.min(tToEdge(cx, vx), tToEdge(cy, vy));
-                        const tNeg = Math.min(tToEdge(1 - cx, -vx), tToEdge(1 - cy, -vy));
-                        const x1 = cx - vx * tNeg;
-                        const y1 = cy - vy * tNeg;
-                        const x2 = cx + vx * tPos;
-                        const y2 = cy + vy * tPos;
-                        function hexToRgbA(h) {
-                            if (!h || typeof h !== 'string') return { color: '#000000', opacity: 1 };
-                            let hex = h.replace('#', '').trim();
-                            if (hex.length === 3) hex = hex.split('').map(c => c + c).join('');
-                            let a = 255;
-                            if (hex.length === 8) {
-                                a = parseInt(hex.slice(6, 8), 16);
-                                hex = hex.slice(0, 6);
-                            }
-                            const opacity = Math.max(0, Math.min(1, a / 255));
-                            const color = '#' + hex.toUpperCase();
-                            return { color, opacity };
-                        }
-                        const c1 = hexToRgbA(gdef.colores[0] || '#FFFFFFFF');
-                        const c2 = hexToRgbA(gdef.colores[1] || '#FFFFFF00');
-                        const midOffset = Math.max(0, Math.min(1, mid));
-                        const grad = new fabric.Gradient({
-                            type: 'linear',
-                            gradientUnits: 'percentage',
-                            coords: { x1, y1, x2, y2 },
-                            colorStops: [
-                                { offset: 0, color: c1.color, opacity: c1.opacity },
-                                { offset: midOffset, color: c1.color, opacity: c1.opacity },
-                                { offset: 1, color: c2.color, opacity: c2.opacity }
-                            ]
-                        });
-                        o.set('fill', grad);
-                    })(obj, el.color);
-                } else if (typeof el.color === 'string') {
-                    obj.customProps.color = el.color;
                 }
 
             } else if (el.tipo === 'texto' || el.tipo === 'marquesina') {
                 const txtAlign = el.alineacion || 'left';
-                const rawFamily = el.tipografia || 'Arial';
-                const cssFamily = (window.normalizeCssFamily ? window.normalizeCssFamily(rawFamily) : rawFamily);
-                const rawPeso = String(el.peso || 'regular').toLowerCase();
-                const pesoToCss = (w) => {
-                    switch (w) {
-                        case 'thin': return '100';
-                        case 'extralight': return '200';
-                        case 'light': return '300';
-                        case 'regular':
-                        case 'normal': return '400';
-                        case 'medium': return '500';
-                        case 'semibold':
-                        case 'semibol':
-                        case 'semiBold': return '600';
-                        case 'bold': return '700';
-                        case 'extrabold': return '800';
-                        case 'black': return '900';
-                        default:
-                            return isNaN(parseInt(w)) ? '400' : String(parseInt(w));
-                    }
-                };
-                const cssWeight = pesoToCss(rawPeso);
                 obj = new fabric.Textbox(el.contenido || 'Texto', {
                     left, top,
                     fontSize: el.size_texto || 40,
-                    fontFamily: cssFamily,
-                    fontWeight: cssWeight,
+                    fontFamily: el.tipografia || 'Arial',
+                    fontWeight: el.peso || 'normal',
                     fill: el.color || '#FFFFFF',
                     backgroundColor: el.fondo_texto || '',
                     opacity: el.transparencia ? (1 - el.transparencia) : 1,
                     textAlign: txtAlign
                 });
-                if (window.ensureFontLoaded) {
-                    window.ensureFontLoaded(cssFamily, cssWeight).then(() => {
-                        obj.set('fontFamily', cssFamily);
-                        obj.set('fontWeight', cssWeight);
-                        canvas.requestRenderAll();
-                    });
-                }
                 
                 const refInBlock = existingInBlock[0];
                 const shouldLockToRect = !isFirst && refInBlock && refInBlock.type === 'rect';
@@ -3553,9 +3201,7 @@
             obj.elementType = el.tipo;
             
             // Restore Custom Props
-            // Importante: excluir 'contenido' y 'alineacion' para que no
-            // sobreescriban cambios hechos en el editor al exportar.
-            const standardKeys = ['tipo', 'posicion', 'size', 'size_texto', 'color', 'transparencia', 'tipografia', 'peso', 'fondo_texto', 'radius', 'contenido', 'alineacion'];
+            const standardKeys = ['tipo', 'posicion', 'size', 'size_texto', 'color', 'transparencia', 'tipografia', 'peso', 'fondo_texto', 'radius'];
             if (!obj.customProps) obj.customProps = {};
             for(let key in el) {
                 if(!standardKeys.includes(key)) {
@@ -3567,8 +3213,8 @@
             if (!isFirst && refObj) {
                  const valXRaw = posParts[0] ? posParts[0].trim() : '0';
                  const valYRaw = posParts[1] ? posParts[1].trim() : '0';
-                const valX = valXRaw.toLowerCase();
-                const valY = valYRaw.toLowerCase();
+                 const valX = valXRaw.toLowerCase();
+                 const valY = valYRaw.toLowerCase();
                  
                  // X Alignment
                  if (valX === 'center') {
@@ -3601,39 +3247,31 @@
                  const valX = valXRaw.toLowerCase();
                  const valY = valYRaw.toLowerCase();
                  
-                if (valX === 'center') {
-                    obj.set('left', (canvas.width - obj.getScaledWidth())/2);
-                    obj.customProps.alignX = 'center';
-                } else if (valX === 'right') {
-                    obj.set('left', canvas.width - obj.getScaledWidth());
-                    obj.customProps.alignX = 'right';
-                } else if (valX === 'left') {
-                    obj.set('left', 0);
-                    obj.customProps.alignX = 'left';
-                } else if (valX.endsWith('%')) {
-                    const pctX = parseFloat(valX.replace('%', ''));
-                    const pxX = isNaN(pctX) ? 0 : (canvas.width * pctX / 100);
-                    obj.set('left', pxX);
-                } else {
-                    obj.set('left', parseInt(valX) || 0);
-                }
+                 if (valX === 'center') {
+                     obj.set('left', (canvas.width - obj.getScaledWidth())/2);
+                     obj.customProps.alignX = 'center';
+                 } else if (valX === 'right') {
+                     obj.set('left', canvas.width - obj.getScaledWidth());
+                     obj.customProps.alignX = 'right';
+                 } else if (valX === 'left') {
+                     obj.set('left', 0);
+                     obj.customProps.alignX = 'left';
+                 } else {
+                     obj.set('left', parseInt(valX) || 0);
+                 }
                  
-                if (valY === 'center') {
-                    obj.set('top', (canvas.height - obj.getScaledHeight())/2);
-                    obj.customProps.alignY = 'center';
-                } else if (valY === 'bottom') {
-                    obj.set('top', canvas.height - obj.getScaledHeight());
-                    obj.customProps.alignY = 'bottom';
-                } else if (valY === 'top') {
-                    obj.set('top', 0);
-                    obj.customProps.alignY = 'top';
-                } else if (valY.endsWith('%')) {
-                    const pctY = parseFloat(valY.replace('%', ''));
-                    const pxY = isNaN(pctY) ? 0 : (canvas.height * pctY / 100);
-                    obj.set('top', pxY);
-                } else {
-                    obj.set('top', parseInt(valY) || 0);
-                }
+                 if (valY === 'center') {
+                     obj.set('top', (canvas.height - obj.getScaledHeight())/2);
+                     obj.customProps.alignY = 'center';
+                 } else if (valY === 'bottom') {
+                     obj.set('top', canvas.height - obj.getScaledHeight());
+                     obj.customProps.alignY = 'bottom';
+                 } else if (valY === 'top') {
+                     obj.set('top', 0);
+                     obj.customProps.alignY = 'top';
+                 } else {
+                     obj.set('top', parseInt(valY) || 0);
+                 }
                  obj.setCoords();
             }
 

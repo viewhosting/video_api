@@ -1,0 +1,43 @@
+
+UNIK MARKETING
+Editor de mascara para video
+Sin video de fondo
+Bloque activo: bloque_1
+
+Duración estimada: 0s
+
+1024 x 820 Zoom
+                            25%
+                            50%
+                            75%
+                            100%
+                            125%
+                            150%
+                            175%
+                            200%
+                        
+
+CONFIGURACIÓN
+
+
+HERRAMIENTAS
+
+
+Nuevo Bloque
+
+Texto
+
+Rectángulo
+
+Imagen
+
+Video
+
+Marquesina
+
+2 Cols
+
+N Cols
+
+CAPAS / BLOQUES
+
