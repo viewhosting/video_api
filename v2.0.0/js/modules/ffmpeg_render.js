@@ -24,13 +24,18 @@ function seekVideo(videoEl, time) {
 function updateAnimationsForFrame(canvas, timeSec) {
     let changed = false;
     canvas.getObjects().forEach(obj => {
-        if (obj.customProps && obj.customProps.tipo === 'marquesina') {
-            const speed = obj.customProps.velocidad || 100;
-            const containerWidth = obj.customProps.size ? parseInt(obj.customProps.size.split(',')[0]) : canvas.width;
-            const startX = containerWidth;
-            const offsetX = startX - (speed * timeSec);
-            if (!obj._originalLeft) obj._originalLeft = obj.left;
-            obj.set('left', obj._originalLeft + offsetX);
+        if (obj.elementType === 'marquesina') {
+            const speed = (obj.customProps && obj.customProps.velocidad) ? obj.customProps.velocidad : 100;
+            const cLeft = (obj.customProps && obj.customProps.containerLeft !== undefined) ? obj.customProps.containerLeft : 0;
+            const cWidth = (obj.customProps && obj.customProps.containerWidth !== undefined) ? obj.customProps.containerWidth : canvas.width;
+
+            if (obj._originalLeft === undefined) obj._originalLeft = obj.left;
+
+            // start position: right edge of container
+            const startX = cLeft + cWidth;
+            const newLeft = startX - (speed * timeSec);
+
+            obj.set('left', newLeft);
             changed = true;
         }
     });
@@ -96,12 +101,12 @@ async function initFFmpeg() {
 
     try {
         safeUpdateText('2. Cargando motor WASM desde servidor local...', true);
-        
+
         await ffmpeg.load({
             coreURL: `${baseURL}/ffmpeg-core.js`,
             wasmURL: `${baseURL}/ffmpeg-core.wasm`
         });
-        
+
         safeUpdateText('3. Motor FFmpeg listo ✅', true);
     } catch (err) {
         console.error('Error en load():', err);
@@ -167,24 +172,24 @@ window.generateLocalVideo = async function () {
             if (hasVideo && videoEl.readyState >= 2) {
                 await seekVideo(videoEl, currentTime);
             }
-            
+
             updateAnimationsForFrame(window.AppState.canvas, i / fps);
             window.AppState.canvas.renderAll();
-            
+
             compCtx.fillStyle = '#000000';
             compCtx.fillRect(0, 0, cw, ch);
-            
+
             if (hasVideo && videoEl.readyState >= 2) {
                 try { compCtx.drawImage(videoEl, 0, 0, cw, ch); } catch (e) { }
             }
-            
+
             try {
                 compCtx.drawImage(window.AppState.canvas.getElement(), 0, 0, cw, ch);
             } catch (e) {
                 console.error("Tainted Canvas Error:", e);
                 throw new Error("El canvas está manchado (CORS).");
             }
-            
+
             const frameName = `frame_${String(i).padStart(4, '0')}.jpg`;
             const blob = await new Promise(r => compCanvas.toBlob(r, 'image/jpeg', 0.9));
             const arrayBuffer = await blob.arrayBuffer();
@@ -205,7 +210,7 @@ window.generateLocalVideo = async function () {
 
         const data = await ffmpeg.readFile('output.mp4');
         const outUrl = URL.createObjectURL(new Blob([data.buffer], { type: 'video/mp4' }));
-        
+
         window.AppState.lastRenderBlobUrl = outUrl;
 
         // Actualizar el botón de descarga

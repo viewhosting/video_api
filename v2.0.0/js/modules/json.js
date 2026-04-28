@@ -512,7 +512,7 @@ window.createObjectFromSchema = function (blockId, el) {
 
     } else if (el.tipo === 'texto' || el.tipo === 'marquesina') {
         const txtAlign = el.alineacion || 'left';
-        obj = new fabric.Textbox(el.contenido || 'Texto', {
+        const textOptions = {
             left, top,
             fontSize: el.size_texto || 40,
             fontFamily: window.normalizeCssFamily ? window.normalizeCssFamily(el.tipografia) : (el.tipografia || 'Arial'),
@@ -524,26 +524,29 @@ window.createObjectFromSchema = function (blockId, el) {
             backgroundColor: el.fondo_texto || '',
             opacity: el.transparencia ? (1 - el.transparencia) : 1,
             textAlign: txtAlign
-        });
+        };
 
-        const refInBlock = existingInBlock[0];
-        const shouldLockToRect = !isFirst && refInBlock && refInBlock.type === 'rect';
+        if (el.tipo === 'marquesina') {
+            // Usar fabric.Text para evitar que haga wrap (saltos de línea)
+            obj = new fabric.Text(el.contenido || 'Texto', textOptions);
+            
+            if (el.size) {
+                if (!obj.customProps) obj.customProps = {};
+                obj.customProps.size = el.size;
+            }
+        } else {
+            obj = new fabric.Textbox(el.contenido || 'Texto', textOptions);
+            
+            const refInBlock = existingInBlock[0];
+            const shouldLockToRect = !isFirst && refInBlock && refInBlock.type === 'rect';
 
-        if (shouldLockToRect) {
-            obj.set('width', refInBlock.getScaledWidth());
-        } else if (el.width) {
-            obj.set('width', parseInt(el.width));
+            if (shouldLockToRect) {
+                obj.set('width', refInBlock.getScaledWidth());
+            } else if (el.width) {
+                obj.set('width', parseInt(el.width));
+            }
         }
-        // Handle size for marquesina container (use width for preview and store in customProps)
-        if (el.tipo === 'marquesina' && el.size) {
-            // No seteamos el width directamente al objeto Fabric Textbox porque fuerza a que el texto
-            // haga saltos de línea (wrap). La marquesina es una sola línea larga.
-            // Guardamos el size original para que el overlay lo dibuje correctamente.
-            if (!obj.customProps) obj.customProps = {};
-            obj.customProps.size = el.size;
-        }
 
-        // Handle radius for text/marquesina background
         if (el.radius) {
             if (!obj.customProps) obj.customProps = {};
             obj.customProps.radius = el.radius;
@@ -736,6 +739,22 @@ window.finalizeObjectCreation = function (obj, blockId, el, isFirst, refObj, pos
     // After adding to canvas, trigger overlay rendering if necessary
     if (el.tipo === 'marquesina' && window.updateMarquesinaOverlay) {
         window.updateMarquesinaOverlay(obj);
+    }
+
+    // Configuración especial para marquesina (Recorte de animación)
+    if (el.tipo === 'marquesina' && refObj) {
+        obj.customProps.containerLeft = refObj.left;
+        obj.customProps.containerTop = refObj.top;
+        obj.customProps.containerWidth = refObj.getScaledWidth();
+        obj.customProps.containerHeight = refObj.getScaledHeight();
+
+        obj.clipPath = new fabric.Rect({
+            left: refObj.left,
+            top: refObj.top,
+            width: refObj.getScaledWidth(),
+            height: refObj.getScaledHeight(),
+            absolutePositioned: true
+        });
     }
 }
 
