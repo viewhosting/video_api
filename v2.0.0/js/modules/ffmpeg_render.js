@@ -129,7 +129,28 @@ window.generateLocalVideo = async function () {
         const ffmpeg = await initFFmpeg();
 
         const fps = 30;
-        const durationSec = parseFloat(payload.fin) - parseFloat(payload.inicio) || 5;
+        let durationSec = parseFloat(payload.fin) - parseFloat(payload.inicio) || 5;
+
+        // Ajustar duración basada en marquesinas (para que el texto logre cruzar completamente)
+        let maxMarqTime = 0;
+        window.AppState.canvas.getObjects().forEach(obj => {
+            if (obj.elementType === 'marquesina') {
+                const speed = (obj.customProps && obj.customProps.velocidad) ? parseFloat(obj.customProps.velocidad) : 100;
+                const cWidth = (obj.customProps && obj.customProps.containerWidth !== undefined) ? obj.customProps.containerWidth : window.AppState.canvas.width;
+                const textWidth = obj.getScaledWidth();
+                if (speed > 0) {
+                    const t = (cWidth + textWidth) / speed;
+                    if (t > maxMarqTime) maxMarqTime = t;
+                }
+            }
+        });
+
+        if (maxMarqTime > durationSec) {
+            durationSec = maxMarqTime;
+        }
+
+        // Límite de seguridad
+        durationSec = Math.min(durationSec, 300); // Maximo 5 minutos
         const totalFrames = Math.ceil(durationSec * fps);
         const startTime = parseFloat(payload.inicio) || 0;
 
