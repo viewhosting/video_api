@@ -207,22 +207,8 @@ window.mapFabricToSchema = function (obj, refObj) {
 
     // Size
     if (obj.elementType === 'texto_varias_columnas') {
-        let baseSize = null;
-        if (refObj) {
-            if (refObj.customProps && refObj.customProps.size) {
-                baseSize = refObj.customProps.size;
-            } else {
-                baseSize = `${Math.round(refObj.getScaledWidth())}, ${Math.round(refObj.getScaledHeight())}`;
-            }
-        }
-        if (obj.customProps && obj.customProps.size) {
-            el.size = baseSize || obj.customProps.size;
-        } else if (baseSize) {
-            el.size = baseSize;
-        } else {
-            el.size = `${Math.round(obj.getScaledWidth())}, ${Math.round(obj.getScaledHeight())}`;
-        }
-
+        el.size = `${Math.round(obj.getScaledWidth())}, ${Math.round(obj.getScaledHeight())}`;
+        
         if (obj.customProps && typeof obj.customProps.gap !== 'undefined') {
             el.gap = parseInt(obj.customProps.gap) || 0;
         }
@@ -623,15 +609,67 @@ window.createObjectFromSchema = function (blockId, el) {
         obj = new fabric.Group([bg, t1, t2], { left, top });
         obj.customProps = JSON.parse(JSON.stringify(el));
     } else if (el.tipo === 'texto_varias_columnas') {
-        let w = 300;
+        let w = 800;
+        let h = 50;
         if (el.size) {
             const sParts = String(el.size).split(',');
             const pw = window.parseValue(sParts[0], window.AppState.canvas.width);
+            const ph = window.parseValue(sParts[1] || sParts[0], window.AppState.canvas.height);
             if (!isNaN(pw) && pw > 0) w = pw;
+            if (!isNaN(ph) && ph > 0) h = ph;
         }
-        obj = new fabric.Textbox('[ Tabla Dinámica N-Cols ]', {
-            left, top, fontSize: 20, fontFamily: 'Courier New',
-            fill: '#ddd', backgroundColor: '#444', width: w, textAlign: 'center'
+
+        // Custom Class for Multi-Column Rendering
+        if (!fabric.MultiColumnText) {
+            fabric.MultiColumnText = fabric.util.createClass(fabric.Rect, {
+                type: 'texto_varias_columnas',
+                _render: function(ctx) {
+                    this.callSuper('_render', ctx);
+                    if (!this.customProps || !this.customProps.columnas) return;
+
+                    const cols = this.customProps.columnas;
+                    let currentX = -this.width / 2;
+                    const totalW = this.width;
+
+                    cols.forEach(col => {
+                        let colW = 100;
+                        if (String(col.width).includes('%')) {
+                            colW = (parseFloat(col.width) / 100) * totalW;
+                        } else {
+                            colW = parseFloat(col.width) || 100;
+                        }
+
+                        ctx.save();
+                        // Estilos de la columna
+                        const fontSize = col.size_texto || 18;
+                        const fontWeight = col.peso || 'regular';
+                        const fontFamily = col.tipografia || 'Arial';
+                        const color = col.color || '#FFFFFF';
+                        const align = col.alineacion || 'center';
+
+                        ctx.font = `${fontWeight} ${fontSize}px "${fontFamily}"`;
+                        ctx.fillStyle = color;
+                        ctx.textBaseline = 'middle';
+
+                        let textX = currentX;
+                        if (align === 'center') textX += colW / 2;
+                        else if (align === 'right') textX += colW;
+
+                        ctx.textAlign = align;
+                        ctx.fillText(col.contenido || '', textX, 0);
+                        ctx.restore();
+
+                        currentX += colW;
+                    });
+                }
+            });
+        }
+
+        obj = new fabric.MultiColumnText({
+            left, top, width: w, height: h,
+            fill: el.bg_color || 'rgba(68, 68, 68, 0.5)',
+            rx: 5, ry: 5,
+            objectCaching: false
         });
         obj.customProps = JSON.parse(JSON.stringify(el));
     } else {
