@@ -533,14 +533,14 @@ window.createObjectFromSchema = function (blockId, el) {
 
         if (el.tipo === 'marquesina') {
             // Usar fabric.Text para evitar que haga wrap (saltos de línea)
-            obj = new fabric.Text(el.contenido || 'Texto', textOptions);
+            obj = new fabric.Text(el.contenido || 'Texto', { ...textOptions, objectCaching: false });
 
             if (el.size) {
                 if (!obj.customProps) obj.customProps = {};
                 obj.customProps.size = el.size;
             }
         } else {
-            obj = new fabric.Textbox(el.contenido || 'Texto', textOptions);
+            obj = new fabric.Textbox(el.contenido || 'Texto', { ...textOptions, objectCaching: false });
 
             const refInBlock = existingInBlock[0];
             const shouldLockToRect = !isFirst && refInBlock && refInBlock.type === 'rect';

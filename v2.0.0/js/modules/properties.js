@@ -866,12 +866,20 @@ window.renderProperties = function (obj) {
             obj.set('shadow', null);
             return;
         }
-        obj.set('shadow', {
+        
+        // Ensure object caching is off for better shadow refresh on texts
+        if (obj.type === 'textbox' || obj.type === 'text') {
+            obj.set('objectCaching', false);
+        }
+
+        obj.set('shadow', new fabric.Shadow({
             color: sColor,
             blur: sBlur,
             offsetX: sX,
             offsetY: sY
-        });
+        }));
+        
+        obj.set('dirty', true);
     }
     function updateShadowProp() {
         if (!obj.customProps) obj.customProps = {};
