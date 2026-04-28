@@ -130,18 +130,24 @@ window.updateMarquesinaOverlay = function (base) {
         ? String(base.customProps.size)
         : `${Math.round(base.width)}, ${Math.round(base.height)}`;
     const parts = sizeStr.split(',');
-    const w = parseInt(parts[0]);
-    const h = parseInt(parts[1] || parts[0] || 0);
+    const w = window.parseValue ? window.parseValue(parts[0], window.AppState.canvas.width) : parseInt(parts[0]);
+    const h = window.parseValue ? window.parseValue(parts[1] !== undefined ? parts[1] : parts[0], window.AppState.canvas.height) : parseInt(parts[1] || parts[0] || 0);
+
+    const bgColor = base.customProps && base.customProps.bg_color ? base.customProps.bg_color : 'transparent';
+    const opacity = base.customProps && base.customProps.transparencia !== undefined ? (1 - base.customProps.transparencia) : 1;
+    let radiusStr = base.customProps && base.customProps.radius ? String(base.customProps.radius) : "0";
+    let rx = parseInt(radiusStr.split(',')[0]) || 0;
+
     if (!overlay) {
         overlay = new fabric.Rect({
             left: base.left,
             top: base.top,
             width: isNaN(w) ? base.width : w,
             height: isNaN(h) ? base.height : h,
-            fill: 'rgba(0,0,0,0)',
-            stroke: '#00ffff',
-            strokeWidth: 1,
-            strokeDashArray: [6, 4],
+            fill: bgColor,
+            opacity: opacity,
+            rx: rx,
+            ry: rx,
             selectable: false,
             evented: false
         });
@@ -154,11 +160,27 @@ window.updateMarquesinaOverlay = function (base) {
             left: base.left,
             top: base.top,
             width: isNaN(w) ? base.width : w,
-            height: isNaN(h) ? base.height : h
+            height: isNaN(h) ? base.height : h,
+            fill: bgColor,
+            opacity: opacity,
+            rx: rx,
+            ry: rx
         });
     }
     overlay.blockId = base.blockId;
     overlay.setCoords();
+
+    // Assign clipping mask to the text so it stays within the background
+    base.clipPath = new fabric.Rect({
+        left: overlay.left,
+        top: overlay.top,
+        width: overlay.width,
+        height: overlay.height,
+        rx: overlay.rx,
+        ry: overlay.ry,
+        absolutePositioned: true
+    });
+
     window.AppState.canvas.requestRenderAll();
 }
 
@@ -167,9 +189,9 @@ window.finalizeAdd = function (obj, blockId, type, extraProps = {}) {
     obj.elementType = type;
     if (extraProps) obj.customProps = { ...obj.customProps, ...extraProps };
     window.AppState.canvas.add(obj);
-    if (type === 'marquesina') {
-        updateMarquesinaOverlay(obj);
-    }
+    // if (type === 'marquesina') {
+    //     updateMarquesinaOverlay(obj);
+    // }
     window.AppState.canvas.setActiveObject(obj);
     updateLayersList();
 }
