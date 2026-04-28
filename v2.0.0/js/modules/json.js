@@ -418,6 +418,17 @@ window.loadJsonFromModal = async function () {
     }
 }
 
+window.parseValue = function (valStr, referenceSize) {
+    if (valStr === undefined || valStr === null || valStr === '') return 0;
+    valStr = String(valStr).trim().toLowerCase();
+    if (valStr.endsWith('%')) {
+        const percent = parseFloat(valStr.replace('%', '')) / 100.0;
+        return referenceSize * percent;
+    }
+    const num = parseFloat(valStr);
+    return isNaN(num) ? 0 : num;
+};
+
 window.createObjectFromSchema = function (blockId, el) {
     // Find existing objects in this block to determine if this is the first one or subsequent
     const existingInBlock = window.AppState.canvas.getObjects().filter(o => o.blockId === blockId && !o.isMarquesinaOverlay);
@@ -433,18 +444,12 @@ window.createObjectFromSchema = function (blockId, el) {
         if (rawX === 'center') left = window.AppState.canvas.width / 2;
         else if (rawX === 'left') left = 0;
         else if (rawX === 'right') left = window.AppState.canvas.width;
-        else {
-            const nX = parseInt(rawX);
-            left = isNaN(nX) ? 0 : nX;
-        }
+        else left = window.parseValue(rawX, window.AppState.canvas.width);
 
         if (rawY === 'center') top = window.AppState.canvas.height / 2;
         else if (rawY === 'top') top = 0;
         else if (rawY === 'bottom') top = window.AppState.canvas.height;
-        else {
-            const nY = parseInt(rawY);
-            top = isNaN(nY) ? 0 : nY;
-        }
+        else top = window.parseValue(rawY, window.AppState.canvas.height);
     } else {
         // Relative to first
         const refObj = existingInBlock[0];
@@ -452,17 +457,17 @@ window.createObjectFromSchema = function (blockId, el) {
         const refTop = refObj.top;
 
         // X
-        const valX = posParts[0].trim();
+        const valX = posParts[0] ? posParts[0].trim().toLowerCase() : '0';
         if (valX !== 'center' && valX !== 'left' && valX !== 'right') {
-            left = refLeft + parseInt(valX);
+            left = refLeft + window.parseValue(valX, window.AppState.canvas.width);
         } else {
             left = refLeft; // Placeholder
         }
 
         // Y
-        const valY = posParts[1] ? posParts[1].trim() : '0';
+        const valY = posParts[1] ? posParts[1].trim().toLowerCase() : '0';
         if (valY !== 'center' && valY !== 'top' && valY !== 'bottom') {
-            top = refTop + parseInt(valY);
+            top = refTop + window.parseValue(valY, window.AppState.canvas.height);
         } else {
             top = refTop; // Placeholder
         }
@@ -474,8 +479,8 @@ window.createObjectFromSchema = function (blockId, el) {
         let w = 100, h = 50;
         if (el.size) {
             const sParts = String(el.size).split(',');
-            w = parseInt(sParts[0]);
-            h = parseInt(sParts[1]);
+            w = window.parseValue(sParts[0], window.AppState.canvas.width);
+            h = window.parseValue(sParts[1] !== undefined ? sParts[1] : sParts[0], window.AppState.canvas.height);
         }
 
         // Radius handling
@@ -529,14 +534,14 @@ window.createObjectFromSchema = function (blockId, el) {
         if (el.tipo === 'marquesina') {
             // Usar fabric.Text para evitar que haga wrap (saltos de línea)
             obj = new fabric.Text(el.contenido || 'Texto', textOptions);
-            
+
             if (el.size) {
                 if (!obj.customProps) obj.customProps = {};
                 obj.customProps.size = el.size;
             }
         } else {
             obj = new fabric.Textbox(el.contenido || 'Texto', textOptions);
-            
+
             const refInBlock = existingInBlock[0];
             const shouldLockToRect = !isFirst && refInBlock && refInBlock.type === 'rect';
 
@@ -562,8 +567,8 @@ window.createObjectFromSchema = function (blockId, el) {
                 svgObj.set({ left, top });
                 if (el.size) {
                     const sParts = String(el.size).split(',');
-                    svgObj.scaleToWidth(parseInt(sParts[0]));
-                    svgObj.scaleToHeight(parseInt(sParts[1]));
+                    svgObj.scaleToWidth(window.parseValue(sParts[0], window.AppState.canvas.width));
+                    svgObj.scaleToHeight(window.parseValue(sParts[1] !== undefined ? sParts[1] : sParts[0], window.AppState.canvas.height));
                 }
                 finalizeObjectCreation(svgObj, blockId, el, isFirst, existingInBlock[0], posParts);
             }, null, { crossOrigin: 'anonymous' });
@@ -572,8 +577,8 @@ window.createObjectFromSchema = function (blockId, el) {
                 img.set({ left, top });
                 if (el.size) {
                     const sParts = String(el.size).split(',');
-                    img.scaleToWidth(parseInt(sParts[0]));
-                    img.scaleToHeight(parseInt(sParts[1]));
+                    img.scaleToWidth(window.parseValue(sParts[0], window.AppState.canvas.width));
+                    img.scaleToHeight(window.parseValue(sParts[1] !== undefined ? sParts[1] : sParts[0], window.AppState.canvas.height));
                 }
                 finalizeObjectCreation(img, blockId, el, isFirst, existingInBlock[0], posParts);
             }, { crossOrigin: 'anonymous' });
@@ -583,8 +588,8 @@ window.createObjectFromSchema = function (blockId, el) {
         let w = 200, h = 112;
         if (el.size) {
             const sParts = String(el.size).split(',');
-            const pw = parseInt(sParts[0]);
-            const ph = parseInt(sParts[1]);
+            const pw = window.parseValue(sParts[0], window.AppState.canvas.width);
+            const ph = window.parseValue(sParts[1] !== undefined ? sParts[1] : sParts[0], window.AppState.canvas.height);
             if (!isNaN(pw) && pw > 0) w = pw;
             if (!isNaN(ph) && ph > 0) h = ph;
         }
@@ -606,8 +611,8 @@ window.createObjectFromSchema = function (blockId, el) {
         let w = 400, h = 60;
         if (el.size) {
             const sParts = String(el.size).split(',');
-            const pw = parseInt(sParts[0]);
-            const ph = parseInt(sParts[1]);
+            const pw = window.parseValue(sParts[0], window.AppState.canvas.width);
+            const ph = window.parseValue(sParts[1] !== undefined ? sParts[1] : sParts[0], window.AppState.canvas.height);
             if (!isNaN(pw) && pw > 0) w = pw;
             if (!isNaN(ph) && ph > 0) h = ph;
         }
@@ -621,7 +626,7 @@ window.createObjectFromSchema = function (blockId, el) {
         let w = 300;
         if (el.size) {
             const sParts = String(el.size).split(',');
-            const pw = parseInt(sParts[0]);
+            const pw = window.parseValue(sParts[0], window.AppState.canvas.width);
             if (!isNaN(pw) && pw > 0) w = pw;
         }
         obj = new fabric.Textbox('[ Tabla Dinámica N-Cols ]', {
@@ -716,7 +721,7 @@ window.finalizeObjectCreation = function (obj, blockId, el, isFirst, refObj, pos
             obj.set('left', 0);
             obj.customProps.alignX = 'left';
         } else {
-            obj.set('left', parseInt(valX) || 0);
+            obj.set('left', window.parseValue(valXRaw, window.AppState.canvas.width));
         }
 
         if (valY === 'center') {
@@ -729,7 +734,7 @@ window.finalizeObjectCreation = function (obj, blockId, el, isFirst, refObj, pos
             obj.set('top', 0);
             obj.customProps.alignY = 'top';
         } else {
-            obj.set('top', parseInt(valY) || 0);
+            obj.set('top', window.parseValue(valYRaw, window.AppState.canvas.height));
         }
         obj.setCoords();
     }

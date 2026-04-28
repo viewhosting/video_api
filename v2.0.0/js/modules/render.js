@@ -173,4 +173,3 @@ window.finalizeAdd = function (obj, blockId, type, extraProps = {}) {
     window.AppState.canvas.setActiveObject(obj);
     updateLayersList();
 }
-
