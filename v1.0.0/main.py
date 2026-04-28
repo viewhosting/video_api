@@ -32,6 +32,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+@app.middleware("http")
+async def add_security_headers(request: Request, call_next):
+    response = await call_next(request)
+    response.headers["Cross-Origin-Opener-Policy"] = "same-origin"
+    response.headers["Cross-Origin-Embedder-Policy"] = "require-corp"
+    return response
+
 def cleanup_files(file_paths: List[str]):
     """Función para limpiar archivos temporales después de enviar la respuesta."""
     for path in file_paths:
