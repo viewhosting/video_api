@@ -69,7 +69,7 @@ function safeShowProgress() {
 function safeUpdateText(text, isLog = false) {
     const txt = document.getElementById('render-status-text');
     if (txt) txt.innerText = text;
-    
+
     if (isLog) {
         const log = document.getElementById('render-log');
         if (log) {
@@ -84,17 +84,17 @@ function safeUpdateText(text, isLog = false) {
     }
 }
 
-async function initFFmpeg() {
+async function initFFmpeg(silent = false) {
     if (ffmpegInstance) return ffmpegInstance;
 
-    safeUpdateText('1. Inicializando clase FFmpeg v0.12...', true);
+    if (!silent) safeUpdateText('1. Inicializando clase FFmpeg v0.12...', true);
     const { FFmpeg } = window.FFmpegWASM;
     const ffmpeg = new FFmpeg();
 
     ffmpeg.on('log', ({ message }) => {
         console.log('[FFmpeg]', message);
         if (!message.includes('frame=') && !message.includes('fps=')) {
-            safeUpdateText(message, true);
+            if (!silent) safeUpdateText(message, true);
         }
     });
 
@@ -102,20 +102,21 @@ async function initFFmpeg() {
         const pct = Math.round(progress * 100);
         const bar = document.getElementById('render-progress-bar');
         if (bar) bar.style.width = `${pct}%`;
-        safeUpdateText(`Codificando video: ${pct}%`);
+        if (!silent) safeUpdateText(`Codificando video: ${pct}%`);
     });
 
-    const baseURL = window.location.origin + '/ffmpeg';
+    // Construimos la ruta absoluta relativa al directorio actual para soportar subdirectorios
+    const baseURL = new URL('./ffmpeg', window.location.href).href;
 
     try {
-        safeUpdateText('2. Cargando motor WASM desde servidor local...', true);
+        if (!silent) safeUpdateText('2. Cargando motor WASM desde servidor local...', true);
 
         await ffmpeg.load({
             coreURL: `${baseURL}/ffmpeg-core.js`,
             wasmURL: `${baseURL}/ffmpeg-core.wasm`
         });
 
-        safeUpdateText('3. Motor FFmpeg listo ✅', true);
+        if (!silent) safeUpdateText('3. Motor FFmpeg listo ✅', true);
     } catch (err) {
         console.error('Error en load():', err);
         safeUpdateText(`❌ Error fatal: ${err.message}`, true);
@@ -243,11 +244,11 @@ window.generateLocalVideo = async function () {
         const fileName = payload.nombre || "video_renderizado.mp4";
 
         await ffmpeg.exec([
-            '-framerate', String(fps), 
-            '-i', 'frame_%04d.jpg', 
-            '-c:v', 'libx264', 
-            '-pix_fmt', 'yuv420p', 
-            '-preset', 'ultrafast', 
+            '-framerate', String(fps),
+            '-i', 'frame_%04d.jpg',
+            '-c:v', 'libx264',
+            '-pix_fmt', 'yuv420p',
+            '-preset', 'ultrafast',
             // Organización jerárquica de metadatos
             '-metadata', `title=${fileName}`,
             '-metadata', `artist=${userCredits}`,
@@ -287,3 +288,11 @@ window.generateLocalVideo = async function () {
         throw e;
     }
 }
+
+// Pre-carga automática al terminar de cargar la web
+window.addEventListener('load', () => {
+    setTimeout(() => {
+        console.log('[System] Iniciando pre-carga de FFmpeg en segundo plano...');
+        initFFmpeg(true).catch(err => console.warn('Pre-carga de FFmpeg fallida (se reintentará al renderizar):', err));
+    }, 2000); // Esperar 2 segundos para no interferir con la carga inicial del editor
+});
