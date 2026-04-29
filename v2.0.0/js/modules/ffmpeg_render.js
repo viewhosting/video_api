@@ -59,17 +59,25 @@ function safeShowProgress() {
     if (pb) pb.style.display = 'block';
     const bar = document.getElementById('render-progress-bar');
     if (bar) bar.style.width = '0%';
+    const log = document.getElementById('render-log');
+    if (log) {
+        log.style.display = 'block';
+        log.innerHTML = ''; // Clean start
+    }
 }
 
 function safeUpdateText(text, isLog = false) {
     const txt = document.getElementById('render-status-text');
     if (txt) txt.innerText = text;
+    
     if (isLog) {
         const log = document.getElementById('render-log');
         if (log) {
             log.style.display = 'block';
             const entry = document.createElement('div');
-            entry.innerText = `[${new Date().toLocaleTimeString()}] ${text}`;
+            entry.style.borderBottom = '1px solid #111';
+            entry.style.padding = '2px 0';
+            entry.innerHTML = `<span style="color:#4f46e5; margin-right:5px;">[${new Date().toLocaleTimeString()}]</span> ${text}`;
             log.appendChild(entry);
             log.scrollTop = log.scrollHeight;
         }
@@ -189,6 +197,9 @@ window.generateLocalVideo = async function () {
         window.AppState.canvas.renderAll();
 
         for (let i = 0; i < totalFrames; i++) {
+            if (i % 10 === 0 || i === totalFrames - 1) {
+                safeUpdateText(`Capturando frame ${i + 1} de ${totalFrames}...`, true);
+            }
             const currentTime = startTime + (i / fps);
             if (hasVideo && videoEl.readyState >= 2) {
                 await seekVideo(videoEl, currentTime);
@@ -227,7 +238,26 @@ window.generateLocalVideo = async function () {
         restoreAnimations(window.AppState.canvas);
         safeUpdateText('6. Iniciando codificación final (MPEG-4)...', true);
 
-        await ffmpeg.exec(['-framerate', String(fps), '-i', 'frame_%04d.jpg', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-preset', 'ultrafast', 'output.mp4']);
+        const userCredits = payload.creditos || "Video Renderizado";
+        const devCredits = "Plataforma creada por Emanuel Flores - Ventas: ventas@cdev.mx";
+        const fileName = payload.nombre || "video_renderizado.mp4";
+
+        await ffmpeg.exec([
+            '-framerate', String(fps), 
+            '-i', 'frame_%04d.jpg', 
+            '-c:v', 'libx264', 
+            '-pix_fmt', 'yuv420p', 
+            '-preset', 'ultrafast', 
+            // Organización jerárquica de metadatos
+            '-metadata', `title=${fileName}`,
+            '-metadata', `artist=${userCredits}`,
+            '-metadata', `author=${devCredits}`,
+            '-metadata', `copyright=${devCredits}`,
+            '-metadata', `description=${devCredits}`,
+            '-metadata', `comment=${devCredits}`,
+            '-metadata', `composer=${devCredits}`,
+            'output.mp4'
+        ]);
 
         const data = await ffmpeg.readFile('output.mp4');
         const outUrl = URL.createObjectURL(new Blob([data.buffer], { type: 'video/mp4' }));

@@ -9,6 +9,7 @@
     "video": "https://www.cdev.mx/input.mp4",
     "logo": "",
     "audio": "",
+    "creditos": "",
     "layout": {
         "bloque_2": [
             {
@@ -16,8 +17,8 @@
             },
             {
                 "tipo": "rectangulo",
-                "posicion": "195, 40",
-                "size": "680, 81",
+                "posicion": "195, 30",
+                "size": "682, 83",
                 "color": "#292A2D",
                 "radius": "0, 0, 15, 15"
             },
@@ -40,7 +41,7 @@
             {
                 "tipo": "rectangulo",
                 "posicion": "24, 725",
-                "size": "726, 63",
+                "size": "728, 52",
                 "color": "#292A2D",
                 "transparencia": 0.09999999999999998,
                 "radius": "0, 0, 15, 15"
@@ -48,7 +49,7 @@
             {
                 "tipo": "texto_varias_columnas",
                 "posicion": "center, center",
-                "size": "805, 45",
+                "size": "726, 50",
                 "gap": 0,
                 "padding": "0",
                 "interlineado": 5,
@@ -61,8 +62,10 @@
                         "alineacion": "center",
                         "color": "#FFFFFF",
                         "tipografia": "Montserrat",
-                        "size_texto": 18,
-                        "peso": "regular"
+                        "size_texto": 20,
+                        "peso": "extrabold",
+                        "borde_lados": "right",
+                        "borde_transparencia": 0
                     },
                     {
                         "contenido": "168",
@@ -70,8 +73,10 @@
                         "alineacion": "center",
                         "color": "#FFFFFF",
                         "tipografia": "Montserrat",
-                        "size_texto": 18,
-                        "peso": "regular"
+                        "size_texto": 20,
+                        "peso": "extrabold",
+                        "borde_lados": "left",
+                        "borde_grosor": 2
                     },
                     {
                         "contenido": "BMB",
@@ -79,8 +84,10 @@
                         "alineacion": "center",
                         "color": "#FFFFFF",
                         "tipografia": "Montserrat",
-                        "size_texto": 18,
-                        "peso": "regular"
+                        "size_texto": 20,
+                        "peso": "extrabold",
+                        "borde_lados": "left",
+                        "borde_grosor": 2
                     },
                     {
                         "contenido": "BMB",
@@ -88,8 +95,10 @@
                         "alineacion": "center",
                         "color": "#FFFFFF",
                         "tipografia": "Montserrat",
-                        "size_texto": 18,
-                        "peso": "regular"
+                        "size_texto": 20,
+                        "peso": "extrabold",
+                        "borde_grosor": 2,
+                        "borde_lados": "left"
                     }
                 ]
             }
@@ -122,16 +131,16 @@
             },
             {
                 "tipo": "rectangulo",
-                "posicion": "25, 680",
-                "size": "724, 64",
+                "posicion": "25, 672",
+                "size": "728, 51",
                 "color": "#292A2D",
                 "transparencia": 0.30000000000000004,
                 "radius": "15, 15, 0, 0"
             },
             {
                 "tipo": "texto_varias_columnas",
-                "posicion": "center",
-                "size": "722, 62",
+                "posicion": "center, center",
+                "size": "726, 50",
                 "gap": 1,
                 "padding": "0",
                 "interlineado": 5,
@@ -143,11 +152,13 @@
                         "alineacion": "center",
                         "color": "#FFFFFF",
                         "tipografia": "Montserrat",
-                        "size_texto": 18,
+                        "size_texto": 20,
                         "peso": "regular",
                         "bg_color": "",
-                        "borde_grosor": 1,
-                        "radius": "15,15,0,0"
+                        "borde_grosor": 2,
+                        "radius": "15,15,0,0",
+                        "borde_transparencia": 0,
+                        "borde_lados": "right"
                     },
                     {
                         "contenido": "Peso",
@@ -155,10 +166,11 @@
                         "alineacion": "center",
                         "color": "#FFFFFF",
                         "tipografia": "Montserrat",
-                        "size_texto": 18,
+                        "size_texto": 20,
                         "peso": "regular",
                         "bg_color": "",
-                        "borde_grosor": 1
+                        "borde_grosor": 2,
+                        "borde_lados": "left"
                     },
                     {
                         "contenido": "Clase",
@@ -166,10 +178,11 @@
                         "alineacion": "center",
                         "color": "#FFFFFF",
                         "tipografia": "Montserrat",
-                        "size_texto": 18,
+                        "size_texto": 20,
                         "peso": "regular",
                         "bg_color": "",
-                        "borde_grosor": 1
+                        "borde_grosor": 2,
+                        "borde_lados": "left"
                     },
                     {
                         "contenido": "Paraje Piedras Coloradas",
@@ -177,10 +190,11 @@
                         "alineacion": "left",
                         "color": "#FFFFFF",
                         "tipografia": "Montserrat",
-                        "size_texto": 16,
+                        "size_texto": 20,
                         "peso": "regular",
                         "bg_color": "",
-                        "borde_grosor": 1
+                        "borde_grosor": 2,
+                        "borde_lados": "left"
                     }
                 ]
             }
@@ -191,8 +205,8 @@
             },
             {
                 "tipo": "rectangulo",
-                "posicion": "152, 631",
-                "size": "569, 51",
+                "posicion": "152, 617",
+                "size": "571, 52",
                 "radius": "0, 0, 0, 0",
                 "gradient_cfg": {
                     "color1": "#FFFFFF",
@@ -219,8 +233,8 @@
             },
             {
                 "tipo": "rectangulo",
-                "posicion": "25, 631",
-                "size": "153, 51",
+                "posicion": "25, 617",
+                "size": "155, 52",
                 "color": "#fffb00",
                 "radius": "15, 15, 0, 0"
             },
@@ -310,19 +324,6 @@
                 "contenido": "https://www.cdev.mx/logo.png"
             }
         ],
-        "bloque_8": [
-            {
-                "tipo": "bloque_meta"
-            },
-            {
-                "tipo": "imagen",
-                "posicion": "750, 558",
-                "size": "249, 171",
-                "color": "rgb(0,0,0)",
-                "contenido": "https://apis.clientesunikms.com/editor_video/mapa.jpg",
-                "sombra": "50, 0, 0, #000000"
-            }
-        ],
         "bloque_12": [
             {
                 "tipo": "bloque_meta"
@@ -333,6 +334,19 @@
                 "size": "50, 50",
                 "color": "rgb(0,0,0)",
                 "contenido": "https://apis.clientesunikms.com/editor_video/pin.svg",
+                "sombra": "50, 0, 0, #000000"
+            }
+        ],
+        "bloque_8": [
+            {
+                "tipo": "bloque_meta"
+            },
+            {
+                "tipo": "imagen",
+                "posicion": "750, 558",
+                "size": "249, 171",
+                "color": "rgb(0,0,0)",
+                "contenido": "https://apis.clientesunikms.com/editor_video/mapa.jpg",
                 "sombra": "50, 0, 0, #000000"
             }
         ]

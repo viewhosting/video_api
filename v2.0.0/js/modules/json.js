@@ -30,6 +30,7 @@ window.generateJson = function () {
         video: document.getElementById('video-url-input').value.trim(),
         logo: document.getElementById('conf-logo').value.trim(),
         audio: document.getElementById('conf-audio').value.trim(),
+        creditos: document.getElementById('conf-creditos').value.trim(),
         layout: {}
     };
 
@@ -355,6 +356,7 @@ window.loadJsonFromModal = async function () {
         if (data.zoom) document.getElementById('conf-zoom').value = data.zoom;
         if (data.logo) document.getElementById('conf-logo').value = data.logo;
         if (data.audio) document.getElementById('conf-audio').value = data.audio;
+        if (data.creditos) document.getElementById('conf-creditos').value = data.creditos;
 
         window.AppState.blockConfigs = {};
 

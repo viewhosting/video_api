@@ -4,8 +4,17 @@ window.AppState.lastRenderBlobUrl = null;
 window.openRenderModalLoading = function () {
     const modal = document.getElementById('render-modal');
     const fab = document.getElementById('render-modal-toggle-fab');
-    document.getElementById('render-status').style.display = 'block';
-    document.getElementById('render-status').innerText = 'Generando…';
+    const statusText = document.getElementById('render-status-text');
+    if (statusText) statusText.innerText = 'Generando…';
+
+    const progressContainer = document.getElementById('render-progress-bar-container');
+    if (progressContainer) progressContainer.style.display = 'none';
+
+    const logContainer = document.getElementById('render-log');
+    if (logContainer) {
+        logContainer.style.display = 'none';
+        logContainer.innerHTML = '';
+    }
     document.getElementById('render-video-wrap').style.display = 'none';
     document.getElementById('render-error').style.display = 'none';
     window.AppState.renderVideoCollapsed = false;
