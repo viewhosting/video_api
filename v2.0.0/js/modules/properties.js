@@ -64,8 +64,20 @@ window.renderProperties = function (obj) {
 
     addPropInput(geomGrid, 'X', Math.round(obj.left), (v) => { obj.set('left', parseInt(v)); window.AppState.canvas.requestRenderAll(); });
     addPropInput(geomGrid, 'Y', Math.round(obj.top), (v) => { obj.set('top', parseInt(v)); window.AppState.canvas.requestRenderAll(); });
-    addPropInput(geomGrid, 'W', (obj.width * obj.scaleX).toFixed(0), (v) => { obj.scaleToWidth(parseInt(v)); window.AppState.canvas.requestRenderAll(); });
-    addPropInput(geomGrid, 'H', (obj.height * obj.scaleY).toFixed(0), (v) => { obj.scaleToHeight(parseInt(v)); window.AppState.canvas.requestRenderAll(); });
+    addPropInput(geomGrid, 'W', (obj.width * obj.scaleX).toFixed(0), (v) => { 
+        const val = parseInt(v);
+        if (!isNaN(val) && val > 0) {
+            obj.set('scaleX', val / obj.width);
+            window.AppState.canvas.requestRenderAll();
+        }
+    });
+    addPropInput(geomGrid, 'H', (obj.height * obj.scaleY).toFixed(0), (v) => { 
+        const val = parseInt(v);
+        if (!isNaN(val) && val > 0) {
+            obj.set('scaleY', val / obj.height);
+            window.AppState.canvas.requestRenderAll();
+        }
+    });
 
     // 2.1 Margin (X, Y) - disponible para todos los elementos
     const marginRow = document.createElement('div');
@@ -579,7 +591,7 @@ window.renderProperties = function (obj) {
             gradToggleRow.className = 'prop-row';
             gradToggleRow.style.marginTop = '-5px';
             gradToggleRow.style.marginBottom = '10px';
-            
+
             const gradLbl = document.createElement('label');
             gradLbl.innerText = 'Usar Degradado';
             gradLbl.style.fontSize = '0.7rem';
@@ -587,7 +599,7 @@ window.renderProperties = function (obj) {
             const gradCheck = document.createElement('input');
             gradCheck.type = 'checkbox';
             gradCheck.checked = !!(obj.customProps && obj.customProps.gradient_cfg);
-            
+
             gradToggleRow.appendChild(gradCheck);
             gradToggleRow.appendChild(gradLbl);
             appearanceGroup.appendChild(gradToggleRow);
@@ -598,7 +610,7 @@ window.renderProperties = function (obj) {
             function applyFabricGradient(cfg) {
                 const isVertical = cfg.orientation === 'vertical';
                 const mid = (cfg.midpoint || 50) / 100;
-                
+
                 const normalizeColor = (c) => {
                     if (!c) return 'rgba(255,255,255,1)';
                     if (c.startsWith('rgb')) return c;
@@ -624,12 +636,12 @@ window.renderProperties = function (obj) {
                 const h = obj.height;
 
                 // ORIGIN-AWARE PIXEL COORDINATES
-                const x1 = obj.originX === 'center' ? -w/2 : 0;
-                const x2 = obj.originX === 'center' ? w/2 : w;
-                const y1 = obj.originY === 'center' ? -h/2 : 0;
-                const y2 = obj.originY === 'center' ? h/2 : h;
+                const x1 = obj.originX === 'center' ? -w / 2 : 0;
+                const x2 = obj.originX === 'center' ? w / 2 : w;
+                const y1 = obj.originY === 'center' ? -h / 2 : 0;
+                const y2 = obj.originY === 'center' ? h / 2 : h;
 
-                const coords = isVertical 
+                const coords = isVertical
                     ? { x1: 0, y1: y1, x2: 0, y2: y2 }
                     : { x1: x1, y1: 0, x2: x2, y2: 0 };
 
@@ -692,264 +704,310 @@ window.renderProperties = function (obj) {
     }
 
     // 4. Text Specific
-    if (obj.type === 'textbox' || obj.type === 'text') {
-        // Caso especial: N Cols
-        if (obj.elementType === 'texto_varias_columnas') {
-            const ncolTextGroup = document.createElement('div');
-            ncolTextGroup.className = 'prop-card-body';
-            propsGroup.appendChild(ncolTextGroup);
+    const isNCols = obj.elementType === 'texto_varias_columnas' || (obj.customProps && obj.customProps.tipo === 'texto_varias_columnas');
 
+    if (isNCols) {
+        const ncolTextGroup = document.createElement('div');
+        ncolTextGroup.className = 'prop-card-body';
+        propsGroup.appendChild(ncolTextGroup);
+
+        if (!obj.customProps) obj.customProps = {};
+
+        const interVal = (obj.customProps && obj.customProps.interlineado) || 5;
+        addPropInput(ncolTextGroup, 'Interlineado', interVal, (v) => {
             if (!obj.customProps) obj.customProps = {};
+            const num = parseFloat(v) || 0;
+            obj.customProps.interlineado = num;
+            obj.set('lineHeight', num);
+            window.AppState.canvas.requestRenderAll();
+        });
 
-            const interVal = (obj.customProps && obj.customProps.interlineado) || 5;
-            addPropInput(ncolTextGroup, 'Interlineado', interVal, (v) => {
-                if (!obj.customProps) obj.customProps = {};
-                const num = parseFloat(v) || 0;
-                obj.customProps.interlineado = num;
-                obj.set('lineHeight', num);
+        const gapVal = (obj.customProps && obj.customProps.gap) || 0;
+        addPropInput(ncolTextGroup, 'Gap Columnas', gapVal, (v) => {
+            if (!obj.customProps) obj.customProps = {};
+            obj.customProps.gap = parseInt(v) || 0;
+            window.AppState.canvas.requestRenderAll();
+        });
+
+        const padVal = (obj.customProps && obj.customProps.padding) || '0';
+        addPropInput(ncolTextGroup, 'Padding (T,R,B,L)', padVal, (v) => {
+            if (!obj.customProps) obj.customProps = {};
+            obj.customProps.padding = v;
+            window.AppState.canvas.requestRenderAll();
+        });
+
+        const defaultSize = `${Math.round(obj.width)}, ${Math.round(obj.height)}`;
+        addPropInput(ncolTextGroup, 'Tamaño (W, H)', (obj.customProps && obj.customProps.size) || defaultSize, (v) => {
+            if (!obj.customProps) obj.customProps = {};
+            obj.customProps.size = v;
+            const parts = String(v).split(',');
+            const w = parseInt(parts[0]);
+            if (!isNaN(w) && w > 0) {
+                obj.set('width', w);
                 window.AppState.canvas.requestRenderAll();
-            });
-
-            const gapVal = (obj.customProps && obj.customProps.gap) || 0;
-            addPropInput(ncolTextGroup, 'Gap Columnas', gapVal, (v) => {
-                if (!obj.customProps) obj.customProps = {};
-                obj.customProps.gap = parseInt(v) || 0;
-            });
-
-            const padVal = (obj.customProps && obj.customProps.padding) || '0';
-            addPropInput(ncolTextGroup, 'Padding (T,R,B,L)', padVal, (v) => {
-                if (!obj.customProps) obj.customProps = {};
-                obj.customProps.padding = v;
-            });
-
-            const defaultSize = `${Math.round(obj.width)}, ${Math.round(obj.height)}`;
-            addPropInput(ncolTextGroup, 'Tamaño (W, H)', (obj.customProps && obj.customProps.size) || defaultSize, (v) => {
-                if (!obj.customProps) obj.customProps = {};
-                obj.customProps.size = v;
-                const parts = String(v).split(',');
-                const w = parseInt(parts[0]);
-                if (!isNaN(w) && w > 0) {
-                    obj.set('width', w);
-                    window.AppState.canvas.requestRenderAll();
-                }
-            });
-
-            const bordeVal = (obj.customProps && obj.customProps.borde_grosor) || 0;
-            addPropInput(ncolTextGroup, 'Borde Grosor', bordeVal, (v) => {
-                if (!obj.customProps) obj.customProps = {};
-                obj.customProps.borde_grosor = parseInt(v) || 0;
-            });
-
-            const ncolColsGroup = document.createElement('div');
-            ncolColsGroup.className = 'prop-card-body';
-            propsGroup.appendChild(ncolColsGroup);
-
-            if (!Array.isArray(obj.customProps.columnas)) {
-                obj.customProps.columnas = [];
             }
-            const cols = obj.customProps.columnas;
+        });
 
-            const colsContainer = document.createElement('div');
-            colsContainer.style.display = 'flex';
-            colsContainer.style.flexDirection = 'column';
-            colsContainer.style.gap = '8px';
-            ncolColsGroup.appendChild(colsContainer);
+        const bordeVal = (obj.customProps && obj.customProps.borde_grosor) || 0;
+        addPropInput(ncolTextGroup, 'Borde Grosor', bordeVal, (v) => {
+            if (!obj.customProps) obj.customProps = {};
+            obj.customProps.borde_grosor = parseInt(v) || 0;
+            window.AppState.canvas.requestRenderAll();
+        });
 
-            cols.forEach((col, idx) => {
-                if (!col) col = {};
-                const card = document.createElement('div');
-                card.style.border = '1px solid #262a33';
-                card.style.borderRadius = '10px';
-                card.style.padding = '8px 10px 10px';
-                card.style.background = '#020617';
-                card.style.boxShadow = '0 14px 30px rgba(0,0,0,0.7)';
+        const ncolColsGroup = document.createElement('div');
+        ncolColsGroup.className = 'prop-card-body';
+        propsGroup.appendChild(ncolColsGroup);
 
-                const headerRow = document.createElement('div');
-                headerRow.style.display = 'flex';
-                headerRow.style.justifyContent = 'space-between';
-                headerRow.style.alignItems = 'center';
-                headerRow.style.marginBottom = '6px';
+        if (!Array.isArray(obj.customProps.columnas)) {
+            obj.customProps.columnas = [];
+        }
+        const cols = obj.customProps.columnas;
 
-                const title = document.createElement('div');
-                title.style.fontSize = '0.7rem';
-                title.style.color = '#94a3b8';
-                title.style.textTransform = 'uppercase';
-                title.style.letterSpacing = '0.12em';
-                title.innerText = `Columna ${idx + 1}`;
+        const colsContainer = document.createElement('div');
+        colsContainer.style.display = 'flex';
+        colsContainer.style.flexDirection = 'column';
+        colsContainer.style.gap = '8px';
+        ncolColsGroup.appendChild(colsContainer);
 
-                const delBtn = document.createElement('button');
-                delBtn.innerText = 'Eliminar';
-                delBtn.style = 'padding: 3px 8px; font-size: 0.65rem; background:#111827; color:#fca5a5; border:1px solid #ef4444; border-radius:999px; cursor:pointer;';
-                delBtn.onclick = () => {
-                    cols.splice(idx, 1);
-                    renderProperties(obj);
-                };
+        cols.forEach((col, idx) => {
+            if (!col) col = {};
+            const card = document.createElement('div');
+            card.style.border = '1px solid #262a33';
+            card.style.borderRadius = '10px';
+            card.style.padding = '8px 10px 10px';
+            card.style.background = '#020617';
+            card.style.boxShadow = '0 14px 30px rgba(0,0,0,0.7)';
 
-                headerRow.appendChild(title);
-                headerRow.appendChild(delBtn);
-                card.appendChild(headerRow);
+            const headerRow = document.createElement('div');
+            headerRow.style.display = 'flex';
+            headerRow.style.justifyContent = 'space-between';
+            headerRow.style.alignItems = 'center';
+            headerRow.style.marginBottom = '6px';
 
-                const grid = document.createElement('div');
-                grid.style.display = 'grid';
-                grid.style.gridTemplateColumns = '1fr 1fr';
-                grid.style.gap = '8px';
-                card.appendChild(grid);
+            const title = document.createElement('div');
+            title.style.fontSize = '0.7rem';
+            title.style.color = '#94a3b8';
+            title.style.textTransform = 'uppercase';
+            title.style.letterSpacing = '0.12em';
+            title.innerText = `Columna ${idx + 1}`;
 
-                addPropInput(grid, 'Ancho (% o px)', col.width || '', (v) => {
-                    col.width = v;
-                });
-
-                addPropSelect(grid, 'Alineación', col.alineacion || 'center', ['left', 'center', 'right'], (v) => {
-                    col.alineacion = v;
-                });
-
-                addPropColor(grid, 'Color', col.color || '#FFFFFF', (v) => {
-                    col.color = v;
-                });
-
-                addPropSelect(grid, 'Tipografía', col.tipografia || 'montserrat', AVAILABLE_FONTS, (v) => {
-                    col.tipografia = v;
-                });
-
-                addPropInput(grid, 'Tamaño Fuente', col.size_texto || 18, (v) => {
-                    col.size_texto = parseInt(v) || 0;
-                });
-
-                addPropSelect(grid, 'Peso', col.peso || 'bold', ['thin', 'light', 'regular', 'medium', 'bold', 'extrabold', 'black'], (v) => {
-                    col.peso = v;
-                });
-
-                addPropColor(card, 'Color Fondo', col.bg_color || '', (v) => {
-                    col.bg_color = v;
-                });
-
-                addPropRange(card, 'Transparencia Fondo', col.bg_transparencia != null ? col.bg_transparencia : 0, 0, 1, 0.05, (v) => {
-                    col.bg_transparencia = parseFloat(v) || 0;
-                });
-
-                addPropInput(card, 'Texto', col.contenido || '', (v) => {
-                    col.contenido = v;
-                }, false, 'textarea');
-
-                colsContainer.appendChild(card);
-            });
-
-            const addBtn = document.createElement('button');
-            addBtn.className = 'btn';
-            addBtn.style.marginTop = '8px';
-            addBtn.style.width = '100%';
-            addBtn.innerText = 'Agregar Columna';
-            addBtn.onclick = () => {
-                obj.customProps.columnas.push({
-                    contenido: '',
-                    width: '20%',
-                    alineacion: 'center',
-                    color: '#FFFFFF',
-                    tipografia: 'montserrat',
-                    size_texto: 18,
-                    peso: 'extrabold'
-                });
+            const delBtn = document.createElement('button');
+            delBtn.innerText = 'Eliminar';
+            delBtn.style = 'padding: 3px 8px; font-size: 0.65rem; background:#111827; color:#fca5a5; border:1px solid #ef4444; border-radius:999px; cursor:pointer;';
+            delBtn.onclick = () => {
+                cols.splice(idx, 1);
+                window.AppState.canvas.requestRenderAll();
                 renderProperties(obj);
             };
-            propsGroup.appendChild(addBtn);
-        } else {
-            // Texto normal / marquesina
-            addPropInput(propsGroup, 'Contenido', obj.text, (v) => { obj.set('text', v); window.AppState.canvas.requestRenderAll(); }, false, 'textarea');
 
-            if (obj.type === 'textbox') {
-                let widthVal = obj.width;
-                let readOnlyWidth = false;
+            headerRow.appendChild(title);
+            headerRow.appendChild(delBtn);
+            card.appendChild(headerRow);
 
-                if (refObj && obj !== refObj && refObj.type === 'rect') {
-                    widthVal = Math.round(refObj.getScaledWidth());
-                    obj.set('width', widthVal);
-                    obj.setCoords();
-                    window.AppState.canvas.requestRenderAll();
-                    readOnlyWidth = true;
-                }
+            const grid = document.createElement('div');
+            grid.style.display = 'grid';
+            grid.style.gridTemplateColumns = '1fr 1fr';
+            grid.style.gap = '8px';
+            card.appendChild(grid);
 
-                addPropInput(propsGroup, 'Ancho Caja', widthVal, (v) => {
-                    if (readOnlyWidth) return;
-                    obj.set('width', parseInt(v));
-                    window.AppState.canvas.requestRenderAll();
-                }, readOnlyWidth);
-            }
-
-            const tipGrid = document.createElement('div');
-            tipGrid.style.display = 'grid';
-            tipGrid.style.gridTemplateColumns = '1fr 1fr';
-            tipGrid.style.gap = '10px';
-            propsGroup.appendChild(tipGrid);
-
-            addPropSelect(tipGrid, 'Tipografía', obj.fontFamily, AVAILABLE_FONTS, (v) => {
-                const normFamily = window.normalizeCssFamily ? window.normalizeCssFamily(v) : v;
-                if (window.ensureFontLoaded) {
-                    window.ensureFontLoaded(normFamily, obj.fontWeight).then(() => {
-                        obj.set('fontFamily', normFamily);
-                        obj.initDimensions();
-                        obj.setCoords();
-                        window.AppState.canvas.requestRenderAll();
-                    });
-                } else {
-                    obj.set('fontFamily', normFamily);
-                    obj.initDimensions();
-                    window.AppState.canvas.requestRenderAll();
-                }
-            });
-
-            addPropSelect(tipGrid, 'Peso', obj.fontWeight, ['thin', 'light', 'regular', 'medium', 'bold', 'extrabold', 'black'], (v) => {
-                const map = { 'thin': 100, 'light': 300, 'regular': 400, 'medium': 500, 'bold': 700, 'extrabold': 800, 'black': 900 };
-                const wNum = map[String(v).toLowerCase()] || 400;
-                obj.set('fontWeight', wNum);
-                if (window.ensureFontLoaded) {
-                    window.ensureFontLoaded(obj.fontFamily, wNum).then(() => {
-                        obj.initDimensions();
-                        obj.setCoords();
-                        window.AppState.canvas.requestRenderAll();
-                    });
-                } else {
-                    obj.initDimensions();
-                    window.AppState.canvas.requestRenderAll();
-                }
-            });
-
-            const alignVal = (obj.customProps && obj.customProps.alineacion) || obj.textAlign || 'left';
-            addPropSelect(propsGroup, 'Alineación texto', alignVal, ['left', 'center', 'right'], (v) => {
-                if (!obj.customProps) obj.customProps = {};
-                obj.customProps.alineacion = v;
-                obj.set('textAlign', v);
+            addPropInput(grid, 'Ancho (% o px)', col.width || '', (v) => {
+                col.width = v;
                 window.AppState.canvas.requestRenderAll();
             });
 
-            const typoGrid2 = document.createElement('div');
-            typoGrid2.style.display = 'grid';
-            typoGrid2.style.gridTemplateColumns = '1fr 1fr';
-            typoGrid2.style.gap = '10px';
-            propsGroup.appendChild(typoGrid2);
+            addPropSelect(grid, 'Alineación', col.alineacion || 'center', ['left', 'center', 'right'], (v) => {
+                col.alineacion = v;
+                window.AppState.canvas.requestRenderAll();
+            });
 
-            addPropInput(typoGrid2, 'Tamaño Fuente', obj.fontSize, (v) => { obj.set('fontSize', parseInt(v)); window.AppState.canvas.requestRenderAll(); });
-            addPropInput(typoGrid2, 'Espaciado Letras', obj.charSpacing || 0, (v) => { obj.set('charSpacing', parseInt(v)); window.AppState.canvas.requestRenderAll(); });
+            addPropColor(grid, 'Color', col.color || '#FFFFFF', (v) => {
+                col.color = v;
+                window.AppState.canvas.requestRenderAll();
+            });
 
-            addPropInput(propsGroup, 'Interlineado', obj.lineHeight || 1, (v) => { obj.set('lineHeight', parseFloat(v)); window.AppState.canvas.requestRenderAll(); });
+            addPropSelect(grid, 'Tipografía', col.tipografia || 'montserrat', AVAILABLE_FONTS, (v) => {
+                col.tipografia = v;
+                window.AppState.canvas.requestRenderAll();
+            });
 
-            // Borde de Texto (stroke)
+            addPropInput(grid, 'Tamaño Fuente', col.size_texto || 18, (v) => {
+                col.size_texto = parseInt(v) || 0;
+                window.AppState.canvas.requestRenderAll();
+            });
+
+            addPropSelect(grid, 'Peso', col.peso || 'bold', ['thin', 'light', 'regular', 'medium', 'bold', 'extrabold', 'black'], (v) => {
+                col.peso = v;
+                window.AppState.canvas.requestRenderAll();
+            });
+
+            addPropColor(card, 'Color Fondo', col.bg_color || '', (v) => {
+                col.bg_color = v;
+                window.AppState.canvas.requestRenderAll();
+            });
+
+            addPropRange(card, 'Transparencia Fondo', col.bg_transparencia != null ? col.bg_transparencia : 0, 0, 1, 0.05, (v) => {
+                col.bg_transparencia = parseFloat(v) || 0;
+                window.AppState.canvas.requestRenderAll();
+            });
+
+            // --- BORDES POR COLUMNA ---
+            const borderSection = document.createElement('div');
+            borderSection.style.marginTop = '8px';
+            borderSection.style.paddingTop = '8px';
+            borderSection.style.borderTop = '1px dashed #262a33';
+            card.appendChild(borderSection);
+
             const borderGrid = document.createElement('div');
             borderGrid.style.display = 'grid';
             borderGrid.style.gridTemplateColumns = '1fr 1fr';
-            borderGrid.style.gap = '10px';
-            propsGroup.appendChild(borderGrid);
+            borderGrid.style.gap = '8px';
+            borderSection.appendChild(borderGrid);
 
-            const bordeG = (obj.customProps && obj.customProps.borde_grosor) || 0;
-            addPropInput(borderGrid, 'Borde Grosor', bordeG, (v) => {
-                if (!obj.customProps) obj.customProps = {};
-                obj.customProps.borde_grosor = parseInt(v) || 0;
+            addPropInput(borderGrid, 'Grosor Borde', col.borde_grosor || 0, (v) => {
+                col.borde_grosor = parseInt(v) || 0;
+                window.AppState.canvas.requestRenderAll();
             });
-            const bordeC = (obj.customProps && obj.customProps.borde_color) || '#000000';
-            addPropColor(borderGrid, 'Borde Color', bordeC, (v) => {
-                if (!obj.customProps) obj.customProps = {};
-                obj.customProps.borde_color = v;
+
+            addPropColor(borderGrid, 'Color Borde', col.borde_color || '#FFFFFF', (v) => {
+                col.borde_color = v;
+                window.AppState.canvas.requestRenderAll();
             });
+
+            addPropRange(borderSection, 'Transparencia Borde', col.borde_transparencia != null ? col.borde_transparencia : 1, 0, 1, 0.05, (v) => {
+                col.borde_transparencia = parseFloat(v) || 0;
+                window.AppState.canvas.requestRenderAll();
+            });
+
+            addPropInput(borderSection, 'Lados (T,R,B,L)', col.borde_lados || 'all', (v) => {
+                col.borde_lados = v;
+                window.AppState.canvas.requestRenderAll();
+            });
+
+            addPropInput(card, 'Texto', col.contenido || '', (v) => {
+                col.contenido = v;
+                window.AppState.canvas.requestRenderAll();
+            }, false, 'textarea');
+
+            colsContainer.appendChild(card);
+        });
+
+        const addBtn = document.createElement('button');
+        addBtn.className = 'btn';
+        addBtn.style.marginTop = '8px';
+        addBtn.style.width = '100%';
+        addBtn.innerText = 'Agregar Columna';
+        addBtn.onclick = () => {
+            obj.customProps.columnas.push({
+                contenido: '',
+                width: '20%',
+                alineacion: 'center',
+                color: '#FFFFFF',
+                tipografia: 'montserrat',
+                size_texto: 18,
+                peso: 'extrabold'
+            });
+            window.AppState.canvas.requestRenderAll();
+            renderProperties(obj);
+        };
+        propsGroup.appendChild(addBtn);
+    } else if (obj.type === 'textbox' || obj.type === 'text') {
+        // Texto normal / marquesina
+        addPropInput(propsGroup, 'Contenido', obj.text, (v) => { obj.set('text', v); window.AppState.canvas.requestRenderAll(); }, false, 'textarea');
+
+        if (obj.type === 'textbox') {
+            let widthVal = obj.width;
+            let readOnlyWidth = false;
+
+            if (refObj && obj !== refObj && refObj.type === 'rect') {
+                widthVal = Math.round(refObj.getScaledWidth());
+                obj.set('width', widthVal);
+                obj.setCoords();
+                window.AppState.canvas.requestRenderAll();
+                readOnlyWidth = true;
+            }
+
+            addPropInput(propsGroup, 'Ancho Caja', widthVal, (v) => {
+                if (readOnlyWidth) return;
+                obj.set('width', parseInt(v));
+                window.AppState.canvas.requestRenderAll();
+            }, readOnlyWidth);
         }
+
+        const tipGrid = document.createElement('div');
+        tipGrid.style.display = 'grid';
+        tipGrid.style.gridTemplateColumns = '1fr 1fr';
+        tipGrid.style.gap = '10px';
+        propsGroup.appendChild(tipGrid);
+
+        addPropSelect(tipGrid, 'Tipografía', obj.fontFamily, AVAILABLE_FONTS, (v) => {
+            const normFamily = window.normalizeCssFamily ? window.normalizeCssFamily(v) : v;
+            if (window.ensureFontLoaded) {
+                window.ensureFontLoaded(normFamily, obj.fontWeight).then(() => {
+                    obj.set('fontFamily', normFamily);
+                    obj.initDimensions();
+                    obj.setCoords();
+                    window.AppState.canvas.requestRenderAll();
+                });
+            } else {
+                obj.set('fontFamily', normFamily);
+                obj.initDimensions();
+                window.AppState.canvas.requestRenderAll();
+            }
+        });
+
+        addPropSelect(tipGrid, 'Peso', obj.fontWeight, ['thin', 'light', 'regular', 'medium', 'bold', 'extrabold', 'black'], (v) => {
+            const map = { 'thin': 100, 'light': 300, 'regular': 400, 'medium': 500, 'bold': 700, 'extrabold': 800, 'black': 900 };
+            const wNum = map[String(v).toLowerCase()] || 400;
+            obj.set('fontWeight', wNum);
+            if (window.ensureFontLoaded) {
+                window.ensureFontLoaded(obj.fontFamily, wNum).then(() => {
+                    obj.initDimensions();
+                    obj.setCoords();
+                    window.AppState.canvas.requestRenderAll();
+                });
+            } else {
+                obj.initDimensions();
+                window.AppState.canvas.requestRenderAll();
+            }
+        });
+
+        const alignVal = (obj.customProps && obj.customProps.alineacion) || obj.textAlign || 'left';
+        addPropSelect(propsGroup, 'Alineación texto', alignVal, ['left', 'center', 'right'], (v) => {
+            if (!obj.customProps) obj.customProps = {};
+            obj.customProps.alineacion = v;
+            obj.set('textAlign', v);
+            window.AppState.canvas.requestRenderAll();
+        });
+
+        const typoGrid2 = document.createElement('div');
+        typoGrid2.style.display = 'grid';
+        typoGrid2.style.gridTemplateColumns = '1fr 1fr';
+        typoGrid2.style.gap = '10px';
+        propsGroup.appendChild(typoGrid2);
+
+        addPropInput(typoGrid2, 'Tamaño Fuente', obj.fontSize, (v) => { obj.set('fontSize', parseInt(v)); window.AppState.canvas.requestRenderAll(); });
+        addPropInput(typoGrid2, 'Espaciado Letras', obj.charSpacing || 0, (v) => { obj.set('charSpacing', parseInt(v)); window.AppState.canvas.requestRenderAll(); });
+
+        addPropInput(propsGroup, 'Interlineado', obj.lineHeight || 1, (v) => { obj.set('lineHeight', parseFloat(v)); window.AppState.canvas.requestRenderAll(); });
+
+        // Borde de Texto (stroke)
+        const borderGrid = document.createElement('div');
+        borderGrid.style.display = 'grid';
+        borderGrid.style.gridTemplateColumns = '1fr 1fr';
+        borderGrid.style.gap = '10px';
+        propsGroup.appendChild(borderGrid);
+
+        const bordeG = (obj.customProps && obj.customProps.borde_grosor) || 0;
+        addPropInput(borderGrid, 'Borde Grosor', bordeG, (v) => {
+            if (!obj.customProps) obj.customProps = {};
+            obj.customProps.borde_grosor = parseInt(v) || 0;
+        });
+        const bordeC = (obj.customProps && obj.customProps.borde_color) || '#000000';
+        addPropColor(borderGrid, 'Borde Color', bordeC, (v) => {
+            if (!obj.customProps) obj.customProps = {};
+            obj.customProps.borde_color = v;
+        });
     }
 
     const shadowGroup = addGroupHeader(root, 'Sombras');
@@ -981,7 +1039,7 @@ window.renderProperties = function (obj) {
             obj.set('shadow', null);
             return;
         }
-        
+
         // Ensure object caching is off for better shadow refresh on texts
         if (obj.type === 'textbox' || obj.type === 'text') {
             obj.set('objectCaching', false);
@@ -993,7 +1051,7 @@ window.renderProperties = function (obj) {
             offsetX: sX,
             offsetY: sY
         }));
-        
+
         obj.set('dirty', true);
     }
     function updateShadowProp() {

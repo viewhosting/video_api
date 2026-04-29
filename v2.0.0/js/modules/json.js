@@ -629,12 +629,15 @@ window.createObjectFromSchema = function (blockId, el) {
             fabric.MultiColumnText = fabric.util.createClass(fabric.Rect, {
                 type: 'texto_varias_columnas',
                 _render: function(ctx) {
+                    // 1. Draw the main container background (the Rect itself)
                     this.callSuper('_render', ctx);
+                    
                     if (!this.customProps || !this.customProps.columnas) return;
 
                     const cols = this.customProps.columnas;
-                    let currentX = -this.width / 2;
                     const totalW = this.width;
+                    const totalH = this.height;
+                    let currentX = -totalW / 2;
 
                     cols.forEach(col => {
                         let colW = 100;
@@ -645,25 +648,71 @@ window.createObjectFromSchema = function (blockId, el) {
                         }
 
                         ctx.save();
-                        // Estilos de la columna
+                        
+                        // 2. Draw Column Background
+                        if (col.bg_color) {
+                            ctx.save();
+                            const opacity = col.bg_transparencia != null ? col.bg_transparencia : 1;
+                            ctx.globalAlpha = opacity;
+                            ctx.fillStyle = col.bg_color;
+                            ctx.fillRect(currentX, -totalH/2, colW, totalH);
+                            ctx.restore();
+                        }
+
+                        // 3. Draw Column Borders
+                        if (col.borde_grosor > 0) {
+                            ctx.save();
+                            const bOpacity = col.borde_transparencia != null ? col.borde_transparencia : 1;
+                            ctx.globalAlpha = bOpacity;
+                            ctx.strokeStyle = col.borde_color || '#FFFFFF';
+                            ctx.lineWidth = col.borde_grosor;
+                            
+                            const sides = String(col.borde_lados || 'all').toLowerCase();
+                            const x1 = currentX;
+                            const x2 = currentX + colW;
+                            const y1 = -totalH / 2;
+                            const y2 = totalH / 2;
+
+                            ctx.beginPath();
+                            if (sides.includes('all')) {
+                                ctx.strokeRect(x1, y1, colW, totalH);
+                            } else {
+                                if (sides.includes('top')) { ctx.moveTo(x1, y1); ctx.lineTo(x2, y1); }
+                                if (sides.includes('bottom')) { ctx.moveTo(x1, y2); ctx.lineTo(x2, y2); }
+                                if (sides.includes('left')) { ctx.moveTo(x1, y1); ctx.lineTo(x1, y2); }
+                                if (sides.includes('right')) { ctx.moveTo(x2, y1); ctx.lineTo(x2, y2); }
+                            }
+                            ctx.stroke();
+                            ctx.restore();
+                        }
+
+                        // 4. Render Column Text
                         const fontSize = col.size_texto || 18;
-                        const fontWeight = col.peso || 'regular';
-                        const fontFamily = col.tipografia || 'Arial';
+                        const fontWeight = col.peso || 'bold';
+                        const fontFamily = col.tipografia || 'Montserrat';
                         const color = col.color || '#FFFFFF';
                         const align = col.alineacion || 'center';
 
-                        ctx.font = `${fontWeight} ${fontSize}px "${fontFamily}"`;
+                        // Map weights if they are strings like 'bold'
+                        const weightMap = { 'thin': 100, 'light': 300, 'regular': 400, 'medium': 500, 'bold': 700, 'extrabold': 800, 'black': 900 };
+                        const finalWeight = weightMap[fontWeight.toLowerCase()] || fontWeight;
+
+                        ctx.font = `${finalWeight} ${fontSize}px "${fontFamily}"`;
                         ctx.fillStyle = color;
                         ctx.textBaseline = 'middle';
+                        ctx.textAlign = align;
 
                         let textX = currentX;
                         if (align === 'center') textX += colW / 2;
                         else if (align === 'right') textX += colW;
 
-                        ctx.textAlign = align;
-                        ctx.fillText(col.contenido || '', textX, 0);
-                        ctx.restore();
+                        // Add small padding for left/right alignment
+                        if (align === 'left') textX += 5;
+                        if (align === 'right') textX -= 5;
 
+                        ctx.fillText(col.contenido || '', textX, 0);
+                        
+                        ctx.restore();
                         currentX += colW;
                     });
                 }
