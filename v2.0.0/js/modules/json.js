@@ -184,10 +184,14 @@ window.mapFabricToSchema = function (obj, refObj) {
         if (obj.customProps && obj.customProps.alignY === 'center') {
             posYStr = 'center';
         } else {
-            const yPct = Math.round((absTop / window.AppState.canvas.height) * 100);
-            posYStr = `${yPct}%`;
+            posYStr = posY;
         }
         el.posicion = `${posXStr}, ${posYStr}`;
+        
+        // Limpieza final: si ambos son center, simplificar a "center"
+        if (el.posicion === 'center, center') {
+            el.posicion = 'center';
+        }
     } else if (refObj && obj === refObj && obj.elementType === 'texto_varias_columnas') {
         // N Cols: si está centrado en X, usar "center" (como el ejemplo)
         if (obj.customProps && obj.customProps.alignX === 'center') {
@@ -207,6 +211,9 @@ window.mapFabricToSchema = function (obj, refObj) {
     }
 
     // Size
+    if (Math.abs(obj.scaleX - 1) < 0.01) obj.set('scaleX', 1);
+    if (Math.abs(obj.scaleY - 1) < 0.01) obj.set('scaleY', 1);
+
     if (obj.elementType === 'texto_varias_columnas') {
         el.size = `${Math.round(obj.getScaledWidth())}, ${Math.round(obj.getScaledHeight())}`;
         
@@ -281,7 +288,7 @@ window.mapFabricToSchema = function (obj, refObj) {
 
     if (el.tipo === 'texto' || el.tipo === 'marquesina') {
         el.contenido = obj.text;
-        el.tipografia = obj.fontFamily.toLowerCase();
+        el.tipografia = obj.fontFamily; // Respetar mayúsculas originales
         el.peso = WEIGHT_MAP[obj.fontWeight] || 'regular';
         if (obj.backgroundColor) el.fondo_texto = obj.backgroundColor;
         if (obj.textAlign) el.alineacion = obj.textAlign;
@@ -430,19 +437,33 @@ window.createObjectFromSchema = function (blockId, el) {
     let left = 0, top = 0;
     const posParts = String(el.posicion || '0,0').split(',');
 
+    let alignXIntent = null, alignYIntent = null;
+
     if (isFirst) {
         const rawX = posParts[0] ? posParts[0].trim().toLowerCase() : '0';
         const rawY = posParts[1] ? posParts[1].trim().toLowerCase() : '0';
 
-        if (rawX === 'center') left = window.AppState.canvas.width / 2;
-        else if (rawX === 'left') left = 0;
-        else if (rawX === 'right') left = window.AppState.canvas.width;
-        else left = window.parseValue(rawX, window.AppState.canvas.width);
+        if (rawX === 'center') {
+            left = window.AppState.canvas.width / 2;
+            alignXIntent = 'center';
+        } else if (rawX === 'left') {
+            left = 0;
+        } else if (rawX === 'right') {
+            left = window.AppState.canvas.width;
+        } else {
+            left = window.parseValue(rawX, window.AppState.canvas.width);
+        }
 
-        if (rawY === 'center') top = window.AppState.canvas.height / 2;
-        else if (rawY === 'top') top = 0;
-        else if (rawY === 'bottom') top = window.AppState.canvas.height;
-        else top = window.parseValue(rawY, window.AppState.canvas.height);
+        if (rawY === 'center') {
+            top = window.AppState.canvas.height / 2;
+            alignYIntent = 'center';
+        } else if (rawY === 'top') {
+            top = 0;
+        } else if (rawY === 'bottom') {
+            top = window.AppState.canvas.height;
+        } else {
+            top = window.parseValue(rawY, window.AppState.canvas.height);
+        }
     } else {
         // Relative to first
         const refObj = existingInBlock[0];
@@ -552,6 +573,22 @@ window.createObjectFromSchema = function (blockId, el) {
 
         if (isFirst && String(el.posicion).includes('center')) obj.originX = 'center';
 
+    } else if (el.tipo === 'mapa') {
+        const url = el.contenido || 'https://via.placeholder.com/400x300?text=Mapa+GPS...';
+        fabric.Image.fromURL(url, function (img) {
+            img.set({ left, top });
+            if (el.size) {
+                const sParts = String(el.size).split(',');
+                img.scaleToWidth(window.parseValue(sParts[0], window.AppState.canvas.width));
+                img.scaleToHeight(window.parseValue(sParts[1] !== undefined ? sParts[1] : sParts[0], window.AppState.canvas.height));
+            }
+            if (el.radius) {
+                const r = parseInt(el.radius) || 0;
+                img.set({ rx: r, ry: r });
+            }
+            finalizeObjectCreation(img, blockId, el, isFirst, existingInBlock[0], posParts, alignXIntent, alignYIntent);
+        }, { crossOrigin: 'anonymous' });
+        return;
     } else if (el.tipo === 'imagen') {
         const isSVG = String(el.contenido || '').toLowerCase().endsWith('.svg');
         if (isSVG) {
@@ -563,7 +600,7 @@ window.createObjectFromSchema = function (blockId, el) {
                     svgObj.scaleToWidth(window.parseValue(sParts[0], window.AppState.canvas.width));
                     svgObj.scaleToHeight(window.parseValue(sParts[1] !== undefined ? sParts[1] : sParts[0], window.AppState.canvas.height));
                 }
-                finalizeObjectCreation(svgObj, blockId, el, isFirst, existingInBlock[0], posParts);
+                finalizeObjectCreation(svgObj, blockId, el, isFirst, existingInBlock[0], posParts, alignXIntent, alignYIntent);
             }, null, { crossOrigin: 'anonymous' });
         } else {
             fabric.Image.fromURL(el.contenido || 'https://via.placeholder.com/100', function (img) {
@@ -573,7 +610,7 @@ window.createObjectFromSchema = function (blockId, el) {
                     img.scaleToWidth(window.parseValue(sParts[0], window.AppState.canvas.width));
                     img.scaleToHeight(window.parseValue(sParts[1] !== undefined ? sParts[1] : sParts[0], window.AppState.canvas.height));
                 }
-                finalizeObjectCreation(img, blockId, el, isFirst, existingInBlock[0], posParts);
+                finalizeObjectCreation(img, blockId, el, isFirst, existingInBlock[0], posParts, alignXIntent, alignYIntent);
             }, { crossOrigin: 'anonymous' });
         }
         return;
@@ -736,14 +773,34 @@ window.createObjectFromSchema = function (blockId, el) {
         obj.customProps = JSON.parse(JSON.stringify(el));
     }
 
+    
+    // Radius Support for Images and Maps
+    if (el.radius && (el.tipo === 'imagen' || el.tipo === 'mapa')) {
+        const r = parseInt(el.radius) || 0;
+        if (r > 0) {
+            obj.clipPath = new fabric.Rect({
+                left: -obj.width / 2,
+                top: -obj.height / 2,
+                width: obj.width,
+                height: obj.height,
+                rx: r, ry: r,
+                absolutePositioned: false
+            });
+            obj.dirty = true;
+        }
+    }
+
     if (obj) {
-        finalizeObjectCreation(obj, blockId, el, isFirst, existingInBlock[0], posParts);
+        finalizeObjectCreation(obj, blockId, el, isFirst, existingInBlock[0], posParts, alignXIntent, alignYIntent);
     }
 }
 
-window.finalizeObjectCreation = function (obj, blockId, el, isFirst, refObj, posParts) {
+window.finalizeObjectCreation = function (obj, blockId, el, isFirst, refObj, posParts, alignXIntent, alignYIntent) {
     obj.blockId = blockId;
     obj.elementType = el.tipo;
+    if (!obj.customProps) obj.customProps = {};
+    if (alignXIntent) obj.customProps.alignX = alignXIntent;
+    if (alignYIntent) obj.customProps.alignY = alignYIntent;
 
     // Restore Custom Props
     const standardKeys = ['tipo', 'posicion', 'size', 'size_texto', 'color', 'transparencia', 'tipografia', 'peso', 'fondo_texto', 'radius', 'sombra'];
@@ -888,7 +945,12 @@ window.finalizeObjectCreation = function (obj, blockId, el, isFirst, refObj, pos
         obj.setCoords();
     }
 
-    window.AppState.canvas.add(obj);
+    if (obj) {
+        if (!obj.customProps) obj.customProps = {};
+        if (alignXIntent) obj.customProps.alignX = alignXIntent;
+        if (alignYIntent) obj.customProps.alignY = alignYIntent;
+        window.AppState.canvas.add(obj);
+    }
 
     // After adding to canvas, trigger overlay rendering if necessary
     if (el.tipo === 'marquesina' && window.updateMarquesinaOverlay) {

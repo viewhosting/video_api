@@ -1,5 +1,25 @@
 // --- PROPERTIES PANEL ---
 
+window.updateMapImage = function (obj) {
+    if (!obj || obj.elementType !== 'mapa') return;
+    const cp = obj.customProps || {};
+    const lat = cp.lat || 0;
+    const lng = cp.lng || 0;
+    const zoom = cp.zoom || 15;
+    const type = cp.map_type || 'map'; // map, sat
+
+    // Usamos el servicio de mapas estáticos de Yandex para este ejemplo por su facilidad con GPS
+    // l=map (esquema), l=sat (satélite), l=skl (híbrido)
+    const mapType = type === 'sat' ? 'sat,skl' : 'map';
+    const url = `https://static-maps.yandex.ru/1.x/?ll=${lng},${lat}&z=${zoom}&size=600,450&l=${mapType}&pt=${lng},${lat},pm2rdm`;
+
+    obj.setSrc(url, function () {
+        if (!obj.customProps) obj.customProps = {};
+        obj.customProps.contenido = url; // Sincronizar para el JSON
+        window.AppState.canvas.requestRenderAll();
+    }, { crossOrigin: 'anonymous' });
+}
+
 window.renderProperties = function (obj) {
     const root = document.getElementById('properties');
     const placeholder = document.getElementById('props-container');
@@ -95,6 +115,8 @@ window.renderProperties = function (obj) {
     marginRow.appendChild(marginLbl);
     marginRow.appendChild(marginInput);
     geomGroup.appendChild(marginRow);
+
+
 
     // 2.5 Relative Alignment
     const objsInBlock = window.AppState.canvas.getObjects().filter(o => (o.blockId || 'bloque_1') === blockId && !o.isMarquesinaOverlay);
@@ -474,6 +496,51 @@ window.renderProperties = function (obj) {
         addPropInput(videoGroup, 'Margin (X,Y)', marginValVideo, (v) => {
             if (!obj.customProps) obj.customProps = {};
             obj.customProps.margin = v;
+        });
+    } else if (obj.elementType === 'mapa') {
+        const mapGroup = document.createElement('div');
+        mapGroup.className = 'prop-card-body';
+        propsGroup.appendChild(mapGroup);
+
+        addPropInput(mapGroup, 'Latitud (GPS)', obj.customProps.lat || 0, (v) => {
+            obj.customProps.lat = parseFloat(v);
+            window.updateMapImage(obj);
+        }, false, 'number');
+
+        addPropInput(mapGroup, 'Longitud (GPS)', obj.customProps.lng || 0, (v) => {
+            obj.customProps.lng = parseFloat(v);
+            window.updateMapImage(obj);
+        }, false, 'number');
+
+        addPropRange(mapGroup, 'Zoom', obj.customProps.zoom || 15, 1, 21, 1, (v) => {
+            obj.customProps.zoom = parseInt(v);
+            window.updateMapImage(obj);
+        });
+
+        addPropSelect(mapGroup, 'Tipo Mapa', obj.customProps.map_type || 'map', ['map', 'sat'], (v) => {
+            obj.customProps.map_type = v;
+            window.updateMapImage(obj);
+        });
+
+        addPropInput(mapGroup, 'Redondeo', obj.customProps.radius || 0, (v) => {
+            if (!obj.customProps) obj.customProps = {};
+            obj.customProps.radius = v;
+            const r = parseInt(v) || 0;
+            
+            if (r > 0) {
+                obj.clipPath = new fabric.Rect({
+                    left: -obj.width / 2,
+                    top: -obj.height / 2,
+                    width: obj.width,
+                    height: obj.height,
+                    rx: r, ry: r,
+                    absolutePositioned: false
+                });
+            } else {
+                obj.clipPath = null;
+            }
+            obj.dirty = true;
+            window.AppState.canvas.requestRenderAll();
         });
     }
 

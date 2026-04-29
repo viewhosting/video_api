@@ -111,6 +111,31 @@ window.addElement = function (type) {
             fill: '#fff', backgroundColor: '#cc0000',
             width: window.AppState.canvas.width
         });
+    } else if (type === 'mapa') {
+        const defaultLat = -34.603722;
+        const defaultLng = -58.381591;
+        const defaultZoom = 15;
+        // Placeholder inicial con texto descriptivo
+        const placeholderUrl = `https://via.placeholder.com/400x300?text=Cargando+Mapa+GPS...`;
+
+        fabric.Image.fromURL(placeholderUrl, function (img) {
+            img.set({
+                left: center.left - 150,
+                top: center.top - 112,
+                width: 300,
+                height: 225
+            });
+            finalizeAdd(img, blockId, 'mapa', {
+                lat: defaultLat,
+                lng: defaultLng,
+                zoom: defaultZoom,
+                map_type: 'roadmap',
+                con_pin: true
+            });
+            // Intentar cargar el mapa real de inmediato
+            if (window.updateMapImage) window.updateMapImage(img);
+        });
+        return;
     }
 
     if (obj) finalizeAdd(obj, blockId, type);

@@ -17,8 +17,8 @@
             },
             {
                 "tipo": "rectangulo",
-                "posicion": "195, 30",
-                "size": "682, 83",
+                "posicion": "195, 40",
+                "size": "683, 51",
                 "color": "#292A2D",
                 "radius": "0, 0, 15, 15"
             },
@@ -41,7 +41,7 @@
             {
                 "tipo": "rectangulo",
                 "posicion": "24, 725",
-                "size": "728, 52",
+                "size": "729, 53",
                 "color": "#292A2D",
                 "transparencia": 0.09999999999999998,
                 "radius": "0, 0, 15, 15"
@@ -132,7 +132,7 @@
             {
                 "tipo": "rectangulo",
                 "posicion": "25, 672",
-                "size": "728, 51",
+                "size": "729, 52",
                 "color": "#292A2D",
                 "transparencia": 0.30000000000000004,
                 "radius": "15, 15, 0, 0"
@@ -206,7 +206,7 @@
             {
                 "tipo": "rectangulo",
                 "posicion": "152, 617",
-                "size": "571, 52",
+                "size": "572, 53",
                 "radius": "0, 0, 0, 0",
                 "gradient_cfg": {
                     "color1": "#FFFFFF",
@@ -234,7 +234,7 @@
             {
                 "tipo": "rectangulo",
                 "posicion": "25, 617",
-                "size": "155, 52",
+                "size": "156, 53",
                 "color": "#fffb00",
                 "radius": "15, 15, 0, 0"
             },
@@ -348,6 +348,22 @@
                 "color": "rgb(0,0,0)",
                 "contenido": "https://apis.clientesunikms.com/editor_video/mapa.jpg",
                 "sombra": "50, 0, 0, #000000"
+            }
+        ],
+        "bloque_13": [
+            {
+                "tipo": "bloque_meta"
+            },
+            {
+                "tipo": "mapa",
+                "posicion": "141, 117",
+                "color": "rgb(0,0,0)",
+                "lat": -34.603722,
+                "lng": -58.381591,
+                "zoom": 15,
+                "map_type": "roadmap",
+                "con_pin": true,
+                "contenido": "https://static-maps.yandex.ru/1.x/?ll=-58.381591,-34.603722&z=15&size=600,450&l=map&pt=-58.381591,-34.603722,pm2rdm"
             }
         ]
     }
