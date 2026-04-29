@@ -6,12 +6,21 @@ window.updateMapImage = function (obj) {
     const lat = cp.lat || 0;
     const lng = cp.lng || 0;
     const zoom = cp.zoom || 15;
-    const type = cp.map_type || 'map'; // map, sat
+    const type = cp.map_type || 'roadmap';
+    const provider = cp.provider || 'google'; // google, yandex
+    const apiKey = 'AIzaSyDD0onsVecR7aXcELdaTPrPzSvOgm6Ei9I';
 
-    // Usamos el servicio de mapas estáticos de Yandex para este ejemplo por su facilidad con GPS
-    // l=map (esquema), l=sat (satélite), l=skl (híbrido)
-    const mapType = type === 'sat' ? 'sat,skl' : 'map';
-    const url = `https://static-maps.yandex.ru/1.x/?ll=${lng},${lat}&z=${zoom}&size=600,450&l=${mapType}&pt=${lng},${lat},pm2rdm`;
+    const w = Math.min(Math.round(obj.getScaledWidth()), 640);
+    const h = Math.min(Math.round(obj.getScaledHeight()), 640);
+    let url = '';
+
+    if (provider === 'yandex') {
+        const yType = (type === 'sat' || type === 'satellite') ? 'sat,skl' : 'map';
+        url = `https://static-maps.yandex.ru/1.x/?ll=${lng},${lat}&z=${zoom}&size=${w},${h}&l=${yType}&pt=${lng},${lat},pm2rdm`;
+    } else {
+        const gType = (type === 'sat' || type === 'satellite') ? 'satellite' : 'roadmap';
+        url = `https://maps.googleapis.com/maps/api/staticmap?center=${lat},${lng}&zoom=${zoom}&size=${w}x${h}&maptype=${gType}&markers=color:red%7C${lat},${lng}&key=${apiKey}`;
+    }
 
     obj.setSrc(url, function () {
         if (!obj.customProps) obj.customProps = {};
@@ -519,6 +528,11 @@ window.renderProperties = function (obj) {
 
         addPropSelect(mapGroup, 'Tipo Mapa', obj.customProps.map_type || 'map', ['map', 'sat'], (v) => {
             obj.customProps.map_type = v;
+            window.updateMapImage(obj);
+        });
+
+        addPropSelect(mapGroup, 'Proveedor', obj.customProps.provider || 'google', ['google', 'yandex'], (v) => {
+            obj.customProps.provider = v;
             window.updateMapImage(obj);
         });
 
