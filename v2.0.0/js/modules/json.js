@@ -300,10 +300,17 @@ window.mapFabricToSchema = function (obj, refObj) {
 
     // Merge Custom Props
     if (obj.customProps) {
-        // Exclude internal props like alignX/alignY from final JSON if we want clean JSON
-        // But merging everything is fine, backend ignores unknowns.
         Object.assign(el, obj.customProps);
+    }
 
+    // Export Shadow (if exists in Fabric object)
+    if (obj.shadow && obj.shadow instanceof fabric.Shadow) {
+        const s = obj.shadow;
+        el.sombra = `${s.blur}, ${s.offsetX}, ${s.offsetY}, ${s.color}`;
+    }
+
+    // Cleanup specific props
+    if (obj.customProps) {
         if (el.tipo !== 'marquesina' && el.tipo !== 'texto_varias_columnas' && el.tipo !== 'imagen' && el.tipo !== 'video') {
             delete el.margin;
             delete el.margin_x;
@@ -314,8 +321,6 @@ window.mapFabricToSchema = function (obj, refObj) {
             delete el.margin_right;
             delete el.padding;
         }
-
-        // Remove alignment props from root if they conflict (though backend doesn't use alignX/Y directly usually)
         delete el.alignX;
         delete el.alignY;
     }
@@ -696,6 +701,61 @@ window.finalizeObjectCreation = function (obj, blockId, el, isFirst, refObj, pos
         if (!standardKeys.includes(key)) {
             obj.customProps[key] = el[key];
         }
+    }
+
+    // Gradient Support
+    if (el.gradient_cfg) {
+        const cfg = el.gradient_cfg;
+        const isVertical = cfg.orientation === 'vertical';
+        const mid = (cfg.midpoint || 50) / 100;
+        
+        const normalizeColor = (c) => {
+            if (!c) return 'rgba(255,255,255,1)';
+            if (c.startsWith('rgb')) return c;
+            try {
+                return new fabric.Color(c).toRgba();
+            } catch (e) {
+                return c;
+            }
+        };
+
+        const c1 = normalizeColor(cfg.color1);
+        const c2 = normalizeColor(cfg.color2);
+
+        // Midpoint color mix
+        const getMidColor = (color1, color2) => {
+            const col1 = new fabric.Color(color1);
+            const col2 = new fabric.Color(color2);
+            const r = Math.round((col1._source[0] + col2._source[0]) / 2);
+            const g = Math.round((col1._source[1] + col2._source[1]) / 2);
+            const b = Math.round((col1._source[2] + col2._source[2]) / 2);
+            const a = (col1.getAlpha() + col2.getAlpha()) / 2;
+            return `rgba(${r},${g},${b},${a})`;
+        };
+        const cMid = getMidColor(c1, c2);
+        const w = obj.width;
+        const h = obj.height;
+
+        // ORIGIN-AWARE PIXEL COORDINATES
+        const x1 = obj.originX === 'center' ? -w/2 : 0;
+        const x2 = obj.originX === 'center' ? w/2 : w;
+        const y1 = obj.originY === 'center' ? -h/2 : 0;
+        const y2 = obj.originY === 'center' ? h/2 : h;
+
+        const coords = isVertical 
+            ? { x1: 0, y1: y1, x2: 0, y2: y2 }
+            : { x1: x1, y1: 0, x2: x2, y2: 0 };
+
+        obj.set('fill', new fabric.Gradient({
+            type: 'linear',
+            gradientUnits: 'pixels',
+            coords: coords,
+            colorStops: [
+                { offset: 0, color: c1 },
+                { offset: mid, color: cMid },
+                { offset: 1, color: c2 }
+            ]
+        }));
     }
 
     // Soporte para Sombra (Uniforme si offset es 0,0)

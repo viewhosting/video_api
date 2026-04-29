@@ -563,7 +563,122 @@ window.renderProperties = function (obj) {
     }
 
     if (obj.type === 'rect' || obj.type === 'textbox' || obj.type === 'text') {
-        addPropColor(appearanceGroup, 'Color Relleno', obj.fill, (v) => { obj.set('fill', v); window.AppState.canvas.requestRenderAll(); });
+        const fillRow = document.createElement('div');
+        fillRow.className = 'prop-row';
+        appearanceGroup.appendChild(fillRow);
+
+        addPropColor(fillRow, 'Color Relleno', typeof obj.fill === 'string' ? obj.fill : '#FFFFFF', (v) => {
+            obj.set('fill', v);
+            if (obj.customProps) delete obj.customProps.gradient_cfg;
+            window.AppState.canvas.requestRenderAll();
+        });
+
+        // Gradient Option for Rectangles
+        if (obj.type === 'rect') {
+            const gradToggleRow = document.createElement('div');
+            gradToggleRow.className = 'prop-row';
+            gradToggleRow.style.marginTop = '-5px';
+            gradToggleRow.style.marginBottom = '10px';
+            
+            const gradLbl = document.createElement('label');
+            gradLbl.innerText = 'Usar Degradado';
+            gradLbl.style.fontSize = '0.7rem';
+
+            const gradCheck = document.createElement('input');
+            gradCheck.type = 'checkbox';
+            gradCheck.checked = !!(obj.customProps && obj.customProps.gradient_cfg);
+            
+            gradToggleRow.appendChild(gradCheck);
+            gradToggleRow.appendChild(gradLbl);
+            appearanceGroup.appendChild(gradToggleRow);
+
+            const gradContainer = document.createElement('div');
+            appearanceGroup.appendChild(gradContainer);
+
+            function applyFabricGradient(cfg) {
+                const isVertical = cfg.orientation === 'vertical';
+                const mid = (cfg.midpoint || 50) / 100;
+                
+                const normalizeColor = (c) => {
+                    if (!c) return 'rgba(255,255,255,1)';
+                    if (c.startsWith('rgb')) return c;
+                    try { return new fabric.Color(c).toRgba(); } catch (e) { return c; }
+                };
+
+                const c1 = normalizeColor(cfg.color1);
+                const c2 = normalizeColor(cfg.color2);
+
+                const getMidColor = (color1, color2) => {
+                    const col1 = new fabric.Color(color1);
+                    const col2 = new fabric.Color(color2);
+                    const r = Math.round((col1._source[0] + col2._source[0]) / 2);
+                    const g = Math.round((col1._source[1] + col2._source[1]) / 2);
+                    const b = Math.round((col1._source[2] + col2._source[2]) / 2);
+                    const a = (col1.getAlpha() + col2.getAlpha()) / 2;
+                    return `rgba(${r},${g},${b},${a})`;
+                };
+
+                const cMid = getMidColor(c1, c2);
+
+                const w = obj.width;
+                const h = obj.height;
+
+                // ORIGIN-AWARE PIXEL COORDINATES
+                const x1 = obj.originX === 'center' ? -w/2 : 0;
+                const x2 = obj.originX === 'center' ? w/2 : w;
+                const y1 = obj.originY === 'center' ? -h/2 : 0;
+                const y2 = obj.originY === 'center' ? h/2 : h;
+
+                const coords = isVertical 
+                    ? { x1: 0, y1: y1, x2: 0, y2: y2 }
+                    : { x1: x1, y1: 0, x2: x2, y2: 0 };
+
+                const grad = new fabric.Gradient({
+                    type: 'linear',
+                    gradientUnits: 'pixels',
+                    coords: coords,
+                    colorStops: [
+                        { offset: 0, color: c1 },
+                        { offset: mid, color: cMid },
+                        { offset: 1, color: c2 }
+                    ]
+                });
+
+                obj.set('fill', grad);
+                if (!obj.customProps) obj.customProps = {};
+                obj.customProps.gradient_cfg = cfg;
+                window.AppState.canvas.requestRenderAll();
+            }
+
+            const renderGradUI = () => {
+                gradContainer.innerHTML = '';
+                if (gradCheck.checked) {
+                    const cfg = (obj.customProps && obj.customProps.gradient_cfg) || {
+                        color1: '#FFFFFF',
+                        color2: '#000000',
+                        orientation: 'vertical',
+                        midpoint: 50
+                    };
+                    addPropGradient(gradContainer, 'Ajustes de Degradado', cfg, (newCfg) => {
+                        applyFabricGradient(newCfg);
+                    });
+                    // Initial apply if just checked
+                    if (!obj.customProps || !obj.customProps.gradient_cfg) {
+                        applyFabricGradient(cfg);
+                    }
+                } else {
+                    // Revert to solid if was gradient
+                    if (obj.customProps && obj.customProps.gradient_cfg) {
+                        delete obj.customProps.gradient_cfg;
+                        obj.set('fill', '#FFFFFF');
+                        window.AppState.canvas.requestRenderAll();
+                    }
+                }
+            };
+
+            gradCheck.onchange = renderGradUI;
+            if (gradCheck.checked) renderGradUI();
+        }
     }
 
     if ((obj.type === 'textbox' || obj.type === 'text') && obj.elementType !== 'texto_varias_columnas') {
