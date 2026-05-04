@@ -183,7 +183,8 @@ window.generateLocalVideo = async function () {
         if (payload.video) {
             safeUpdateText('4. Preparando video base...', true);
             try {
-                localVideoUrl = await loadVideoToBlobURL(payload.video);
+                const evalVideoUrl = window.evaluateVariables ? window.evaluateVariables(payload.video) : payload.video;
+                localVideoUrl = await loadVideoToBlobURL(evalVideoUrl);
                 videoEl.src = localVideoUrl;
                 await new Promise((resolve) => {
                     videoEl.onloadeddata = resolve;

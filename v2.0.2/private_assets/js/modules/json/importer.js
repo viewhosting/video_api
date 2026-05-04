@@ -95,16 +95,21 @@ async function createObjectFromSchema(blockId, el) {
             originX: 'left', originY: 'top',
             objectCaching: false
         };
+        const rawContent = el.contenido || 'Texto';
+        const evalContent = window.evaluateVariables ? window.evaluateVariables(rawContent) : rawContent;
         if (el.tipo === 'marquesina') {
-            obj = new fabric.Text(el.contenido || 'Texto', textOptions);
+            obj = new fabric.Text(evalContent, textOptions);
             if (el.size) {
                 if (!obj.customProps) obj.customProps = {};
                 obj.customProps.size = el.size;
             }
         } else {
-            obj = new fabric.Textbox(el.contenido || 'Texto', textOptions);
+            obj = new fabric.Textbox(evalContent, textOptions);
             if (el.width) obj.set('width', parseInt(el.width));
         }
+        if (!obj.customProps) obj.customProps = {};
+        obj.customProps.raw_contenido = rawContent;
+
         if (el.tipografia) {
             const family = window.normalizeCssFamily ? window.normalizeCssFamily(el.tipografia, el.peso || 'normal') : el.tipografia;
             obj.set('fontFamily', family);
@@ -127,10 +132,14 @@ async function createObjectFromSchema(blockId, el) {
         });
 
     } else if (el.tipo === 'imagen' || el.tipo === 'mapa') {
+        const rawContent = el.contenido || '';
+        const evalContent = window.evaluateVariables ? window.evaluateVariables(rawContent) : rawContent;
         obj = await new Promise((resolve) => {
-            fabric.Image.fromURL(el.contenido || '', function (img) {
+            fabric.Image.fromURL(evalContent, function (img) {
                 if (!img) return resolve(null);
                 img.set({ left, top, opacity, originX: 'left', originY: 'top', objectCaching: false });
+                if (!img.customProps) img.customProps = {};
+                img.customProps.raw_contenido = rawContent;
                 if (el.size) {
                     const s = String(el.size).split(',');
                     const targetW = parseValue(s[0], canvas.width);

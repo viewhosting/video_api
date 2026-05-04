@@ -320,14 +320,18 @@ window.renderProperties = function (obj) {
 
     if (blockConfig && blockConfig.properties) {
         blockConfig.properties(obj, propsGroup);
-    } else {
-        // Fallback para tipos básicos o no registrados
-        if (obj.type === 'textbox' || obj.type === 'text') {
-            addPropInput(propsGroup, 'Contenido', obj.text, (v) => {
-                obj.set('text', v);
-                window.AppState.canvas.requestRenderAll();
-            }, false, 'textarea');
-        }
+    }
+
+    // Siempre agregar "Contenido" para cualquier elemento de tipo texto/textbox, aunque tenga config
+    if (obj.type === 'textbox' || obj.type === 'text') {
+        const rawContent = (obj.customProps && obj.customProps.raw_contenido !== undefined) ? obj.customProps.raw_contenido : obj.text;
+        addPropInput(propsGroup, 'Contenido', rawContent, (v) => {
+            if (!obj.customProps) obj.customProps = {};
+            obj.customProps.raw_contenido = v;
+            const evalContent = window.evaluateVariables ? window.evaluateVariables(v) : v;
+            obj.set('text', evalContent);
+            window.AppState.canvas.requestRenderAll();
+        }, false, 'textarea');
     }
 
     // 5. Propiedades de Texto (Solo si es un objeto de texto)

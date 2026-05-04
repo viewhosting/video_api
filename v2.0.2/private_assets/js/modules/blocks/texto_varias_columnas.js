@@ -87,7 +87,9 @@ if (typeof fabric !== 'undefined') {
                 if (align === 'left') textX += 5;
                 if (align === 'right') textX -= 5;
 
-                ctx.fillText(col.contenido || '', textX, 0);
+                const rawContent = col.contenido || '';
+                const evalContent = window.evaluateVariables ? window.evaluateVariables(rawContent) : rawContent;
+                ctx.fillText(evalContent, textX, 0);
 
                 ctx.restore();
                 currentX += colW + (this.customProps.gap || 0);
@@ -164,8 +166,14 @@ window.BlockRegistry.register('texto_varias_columnas', {
                 window.renderProperties(obj);
             };
 
+            window.addPropInput(card, 'Contenido', col.contenido || '', (v) => {
+                col.contenido = v;
+                obj.set('dirty', true);
+                window.AppState.canvas.requestRenderAll();
+            }, false, 'textarea');
+
             const grid = document.createElement('div');
-            grid.style = 'display:grid; grid-template-columns: 1fr 1fr; gap:10px;';
+            grid.style = 'display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-top: 10px;';
             card.appendChild(grid);
 
             window.addPropInput(grid, 'Ancho (% o px)', col.width || '20%', (v) => { col.width = v; obj.set('dirty', true); window.AppState.canvas.requestRenderAll(); });

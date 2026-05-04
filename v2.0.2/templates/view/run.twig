@@ -29,6 +29,20 @@
     
     <script>
         window.ACTIVE_TEMPLATE_ID = null;
+        window.VARIABLES_DINAMICAS = {{ variables.dinamicas | json_encode | raw }};
+        
+        window.evaluateVariables = function(text) {
+            if (!text || typeof text !== 'string') return text;
+            let result = text;
+            if (window.VARIABLES_DINAMICAS) {
+                for (const [key, val] of Object.entries(window.VARIABLES_DINAMICAS)) {
+                    const regex = new RegExp('\\{\\{' + key + '\\}\\}', 'g');
+                    result = result.replace(regex, val);
+                }
+            }
+            return result;
+        };
+
         console.log(window.SAVED_TEMPLATES);
         /**
          * Controla la apertura del slidebar lateral del modal
@@ -1115,6 +1129,32 @@
                 </div>
             </div>
 
+            <div class="accordion-section" id="accordion-variables-section">
+                <button class="accordion-header" data-accordion-target="accordion-variables">
+                    <span><i class="fas fa-tags"></i> Variables Dinámicas</span>
+                    <i class="fas fa-chevron-down" style="font-size: 0.7rem;"></i>
+                </button>
+                <div class="accordion-body" id="accordion-variables">
+                    <div style="padding:10px; font-size:0.75rem; color:#aaa; line-height:1.4;">
+                        Copia estas etiquetas y pégalas en el contenido de tus textos para que se reemplacen automáticamente.
+                    </div>
+                    <div class="custom-scrollbar" style="max-height: 200px; overflow-y: auto; padding: 0 10px 10px 10px; display: flex; flex-direction: column; gap: 5px;">
+                        {% if variables.dinamicas is empty %}
+                            <div style="text-align:center; color:#555; padding: 10px; font-size:0.8rem;">El panel está vacío</div>
+                        {% else %}
+                            {% for key, val in variables.dinamicas %}
+                                <div style="background: #15171c; padding: 6px 10px; border-radius: 4px; border: 1px solid #262a33; display: flex; justify-content: space-between; align-items: center;">
+                                    <span style="color:#e2e8f0; font-family: monospace; font-size: 0.75rem;">{{ '{{' ~ key ~ '}}' }}</span>
+                                    <button onclick="navigator.clipboard.writeText('{{ '{{' ~ key ~ '}}' }}');" style="background: none; border: none; color: #4f46e5; cursor: pointer; font-size: 0.8rem;" title="Copiar etiqueta">
+                                        <i class="far fa-copy"></i>
+                                    </button>
+                                </div>
+                            {% endfor %}
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
             <div class="accordion-section" id="accordion-layers-section">
                 <button class="accordion-header" data-accordion-target="accordion-layers">
                     <span><i class="fas fa-layer-group"></i> Capas / Bloques</span>
@@ -1294,6 +1334,44 @@
         style="position: fixed; bottom: 15px; right: 15px; z-index: 1001; display: none; padding: 8px 14px; background: #007acc; color: #fff; border: none; border-radius: 20px; cursor: pointer; font-size: 0.8rem;">
         Ver resultado
     </button>
+    <!-- Auto-load plantilla -->
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            {% if variables.dinamicas.PLANTILLA is defined and variables.dinamicas.PLANTILLA is not empty %}
+                const plantillaDeseada = "{{ variables.dinamicas.PLANTILLA | escape('js') }}";
+                
+                // Esperamos un momento para asegurar que canvas y módulos estén inicializados
+                setTimeout(() => {
+                    let foundId = null;
+                    if (window.SAVED_TEMPLATES) {
+                        for (let id in window.SAVED_TEMPLATES) {
+                            if (window.SAVED_TEMPLATES[id].nombre === plantillaDeseada) {
+                                foundId = id;
+                                break;
+                            }
+                        }
+                    }
+                    
+                    if (foundId && window.importJson) {
+                        console.log("Video API: Auto-cargando plantilla solicitada ->", plantillaDeseada);
+                        const templateData = window.SAVED_TEMPLATES[foundId].data;
+                        
+                        // Cargamos silenciosamente sin el 'confirm' dialog
+                        window.importJson(templateData);
+                        window.ACTIVE_TEMPLATE_ID = foundId;
+                        
+                        const jsonTextarea = document.getElementById('json-textarea');
+                        if (jsonTextarea) jsonTextarea.value = JSON.stringify(templateData, null, 4);
+                        
+                        const templateActiveActions = document.getElementById('template-active-actions');
+                        if (templateActiveActions) templateActiveActions.style.display = 'flex';
+                    } else {
+                        console.warn("Video API: No se encontró la plantilla '" + plantillaDeseada + "' para auto-carga.");
+                    }
+                }, 1000);
+            {% endif %}
+        });
+    </script>
 
 </body>
 

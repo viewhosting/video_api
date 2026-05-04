@@ -1,7 +1,8 @@
 // --- BACKGROUND VIDEO LOGIC ---
 window.updateBackgroundVideo = function (overrideUrl = null) {
     const inputVal = document.getElementById('video-url-input').value.trim();
-    const url = overrideUrl || inputVal;
+    const rawUrl = overrideUrl || inputVal;
+    const url = window.evaluateVariables ? window.evaluateVariables(rawUrl) : rawUrl;
 
     const retryBtn = document.getElementById('retry-video-btn');
 

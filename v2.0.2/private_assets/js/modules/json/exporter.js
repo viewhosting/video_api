@@ -83,7 +83,11 @@ window.mapFabricToSchema = function (obj, refObj) {
 
     // 2. Contenido (Prioridad en el orden del JSON)
     if (type === 'texto' || type === 'marquesina' || type === 'imagen' || type === 'video' || type === 'mapa') {
-        el.contenido = obj.text || (obj.customProps && obj.customProps.contenido) || (typeof obj.getSrc === 'function' ? obj.getSrc() : '');
+        if (obj.customProps && obj.customProps.raw_contenido !== undefined) {
+            el.contenido = obj.customProps.raw_contenido;
+        } else {
+            el.contenido = obj.text || (obj.customProps && obj.customProps.contenido) || (typeof obj.getSrc === 'function' ? obj.getSrc() : '');
+        }
     }
 
     // 3. Dimensiones y Texto
