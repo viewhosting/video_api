@@ -56,7 +56,34 @@ class CorrerController extends Controller {
             'js_ffmpeg_core'     => $publicBase . "/ffmpeg-core.js",
             'wasm_ffmpeg_core'   => $publicBase . "/ffmpeg-core.wasm",
             'worker_ffmpeg_core' => $publicBase . "/ffmpeg-core.worker.js",
-            'templates'          => $templates
+            'templates'          => $templates,
+            'variables'          => [
+                                        'dinamicas' => [        
+                                            'ESCRITORIO' => 'lote21',
+                                            'VIDEO_URL' => 'https://www.cdev.mx/input.mp4',
+                                            'AUDIO_URL' => '',
+                                            'LOGO_URL' => 'https://www.cdev.mx/logo.png',
+                                            'ARCHIVO' => 'render_remoto.mp4',
+                                            'PLANTILLA' => 'Ejemplo 1',
+                                            "TELEFONOS_CONTACTO"=>"098 702 484  099 724 117   092 689 695",
+                                            "LOT_NUMERO"=>"Lote 19",
+                                            "CATEGORIA_GANADO"=>"TERNEROS",
+                                            "CANTIDAD_CABEZAS"=>"64",
+                                            "PESO_PROMEDIO"=>"168",
+                                            "CLASE"=>"BMB",
+                                            "ESTADO"=>"BMB",
+                                            "PARAJE"=>"Piedras Coloradas",
+                                            'LATITUD'=>"-34.89122",
+                                            'LONGITUD'=>"-66.85496",
+                                            "DEPARTAMENTO"=>"Paysandú",
+                                            'TEXTO_1'=>"Se vende ternero de un año y dos meses esta muy bien de cría y tiene buen estado de doma",
+                                            "TEXTO_2"=>""
+                                        ],
+                                        'fijas' => [
+                                            'copyright' => '@2026 Cdev.mx. Todos los derechos reservados.',
+                                            'redes_sociales' => '@CDMX   @lote21mx   @lote21mx'
+                                        ]
+            ]
         ];
 
    //     print_r($templates);

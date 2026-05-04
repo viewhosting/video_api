@@ -21,10 +21,9 @@ class AccesoController extends Controller {
 
 
     //    echo $this->_encriptar('9|'.time().'|esteesunsecretoparavideo|apis.clientesunikms.com');
-    //    exit;
-
-
-
+    //     exit;
+        // echo $this->_encriptar('esteesunsecretoparavideo');
+        // exit;
 
         $token = $_GET['t'] ?? '';
 
@@ -33,31 +32,77 @@ class AccesoController extends Controller {
         }
 
         try {
-            // 1. DESENCRIPTACIÓN
-            // El token debe haber sido cifrado con la secret_key y secret_iv del config.php
-            // Formato esperado: ID_CLIENTE | TIMESTAMP | SECRETO_SESION | DOMINIO_PERMITIDO
-            $decrypted = $this->_desciptar($token);
-            $parts = explode('|', $decrypted);
-          //  print_r($parts);
-            if (count($parts) !== 4) {
-                throw new \Exception("Estructura de llave inválida.");
+            // 1. OBTENCIÓN DE TOKENS (Decodificados)
+            $token_nonce = urldecode($_GET['t'] ?? '');
+            $token_id    = urldecode($_GET['id'] ?? '');
+
+            if (empty($token_nonce) || empty($token_id)) {
+                throw new \Exception("Parámetros de acceso incompletos.");
+            }
+         
+
+
+            // 2. DESENCRIPTACIÓN DE LA IDENTIDAD DEL CLIENTE (data_id)
+            // Formato esperado en 'id': ID_CLIENTE | DOMINIO_PERMITIDO (y opcionalmente secreto)
+            $decrypted_id = $this->_desciptar($token_id);
+            $parts_id = explode('|', $decrypted_id);
+            
+
+            
+            if (count($parts_id) < 2) {
+                throw new \Exception("Estructura de llave de cliente inválida.");
             }
 
-            $clientId      = $parts[0];
-            $timestamp     = (int)$parts[1];
-            $sessionSecret = $parts[2];
-            $allowedDomain = $parts[3];
 
-            // 2. VALIDACIÓN DE TIEMPO (Handshake de máximo 60 segundos)
-            // Evita ataques de repetición con URLs viejas
+            $clientId      = $parts_id[0];
+            // El dominio permitido asumo que es la segunda posición
+            $allowedDomain = $parts_id[3];
+
+
+
+
+
+
+            // Si hay un tercer parámetro para secreto
+            $sessionSecret = $parts_id[2] ?? \Services\Config::getInstance()->get('secret_session');
+
+            // 3. DESENCRIPTACIÓN DEL NONCE Y TIMESTAMP (Generado por llaveAction)
+            // Formato esperado en 't': TIMESTAMP | NONCE
+            $decrypted_nonce = $this->_desciptar($token_nonce);
+            $parts_nonce = explode('|', $decrypted_nonce);
+            if (count($parts_nonce) !== 2) {
+                throw new \Exception("Estructura de llave de seguridad inválida.");
+            }
+
+            $timestamp = (int)$parts_nonce[0];
+            $nonce     = $parts_nonce[1];
+
+            // 4. VALIDACIÓN DE NONCE (Anti-Replay Attack)
+            @session_start();
+            if (!isset($_SESSION['video_nonce']) || $_SESSION['video_nonce'] !== $nonce) {
+                throw new \Exception("El token de acceso es inválido o ya fue utilizado (Hash Único expirado).");
+            }
+            // Consumir el nonce actual
+            unset($_SESSION['video_nonce']);
+
+            // 5. VALIDACIÓN DE TIEMPO (Handshake de máximo 60 segundos)
+            // Recuerda que este tiempo empieza a correr cuando carga el JS en el HTML
             if (abs(time() - $timestamp) > 60) {
-              //  throw new \Exception("La llave de acceso ha expirado por seguridad. Intente nuevamente desde su panel.");
+                throw new \Exception("La llave de acceso ha expirado por inactividad. Por favor, recarga la página para generar una nueva.");
             }
 
-            // 3. VALIDACIÓN DE ORIGEN (Referer)
-            // Verificamos que la ventana que abrió esta venga del dominio permitido en el token
+            // 6. VALIDACIÓN DE ORIGEN (Opcional)
             $referer = $_SERVER['HTTP_REFERER'] ?? '';
             if (!empty($referer) && !str_contains($referer, $allowedDomain)) {
+
+                print_r([
+                    'error' => 'Referer no coincide',
+                    'referer' => $referer,
+                    'allowed' => $allowedDomain
+                ]);
+
+
+
                 $this->guardarLog([
                     'error' => 'Referer no coincide',
                     'referer' => $referer,
@@ -97,20 +142,94 @@ class AccesoController extends Controller {
                 session_start();
             }
             
-            $_SESSION['logueo']     = true;
-            $_SESSION['usuario']    = $cliente;
-            $_SESSION['secreto']    = $sessionSecret; // Clave dinámica para el Proxy de JS
-            $_SESSION['trace_auth'] = $this->trace_id;
+            $_SESSION['logueo'] = true;
+            $_SESSION['usuario'] = [
+                'idClientes' => $clientId,
+                'dominio' => $allowedDomain
+            ];
+
+            // 8. ROTACIÓN DE NONCE
+            // Generamos un nuevo token 't' para enviarlo al padre
+            $newNonce = bin2hex(random_bytes(16));
+            $_SESSION['video_nonce'] = $newNonce;
+            
+            $payload = time() . "|$newNonce";
+            $newToken = $this->_encriptar($payload);
 
             $this->guardarLog("Handshake exitoso: Cliente #{$clientId} [{$cliente['Nombre']}] desde {$allowedDomain}", 'auth_success');
 
-            // 6. REDIRECCIÓN AL EDITOR (CorrerController)
-            header("Location: /video_api/correr");
+            // Enviamos el nuevo TOKEN al padre y redirigimos la ventana actual al editor
+            echo <<<HTML
+            <!DOCTYPE html>
+            <html>
+            <head><title>Autenticando...</title></head>
+            <body>
+                <script>
+                    if (window.opener) {
+                        window.opener.postMessage({
+                            function: "AccesoVideoOK", 
+                            nuevo_token: "{$newToken}"
+                        }, "*");
+                    }
+                    window.location.href = "/video_/correr";
+                </script>
+            </body>
+            </html>
+            HTML;
             exit;
 
         } catch (\Exception $e) {
             $this->guardarLog("Fallo de Handshake: " . $e->getMessage(), 'auth_error');
-            $this->_CargarError($e->getMessage());
+            
+            echo <<<HTML
+            <!DOCTYPE html>
+            <html>
+            <head><title>Error</title></head>
+            <body>
+                <script>
+                    if (window.opener) {
+                        window.opener.postMessage({function: "Error", mensaje: "{$e->getMessage()}"}, "*");
+                        window.close();
+                    } else {
+                        document.write("Error: {$e->getMessage()}");
+                    }
+                </script>
+            </body>
+            </html>
+            HTML;
+            exit;
         }
+    }
+
+    public function llaveAction() {
+
+        // echo $this->_encriptar('esteesunsecretoparavideo');
+        // exit;
+
+        @session_start();
+        $nonce = bin2hex(random_bytes(16));
+        $_SESSION['video_nonce'] = $nonce;
+
+        // Armar el payload dinámico: TIME | NONCE
+        $payload = time() . "|$nonce";
+        $token_encriptado = $this->_encriptar($payload);
+
+        // Calcular la URL base dinámicamente desde el config global
+        $baseUrl = \Services\Config::getInstance()->get('domain');
+
+        header('Content-Type: application/javascript');
+
+        $jsPath = __DIR__ . '/../../private_assets/js/__auth_bridge_x92.js';
+        
+        if (file_exists($jsPath)) {
+            $jsContent = file_get_contents($jsPath);
+            // Inyectamos las variables dinámicas en el JS
+            $jsContent = str_replace('{{LLAVE_ENCRIPTADA}}', $token_encriptado, $jsContent);
+            $jsContent = str_replace('{{BASE_URL}}', $baseUrl, $jsContent);
+            echo $jsContent;
+        } else {
+            echo "console.error('Video API Error: Archivo de puente de seguridad no encontrado.');";
+        }
+        exit;
     }
 }
