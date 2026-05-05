@@ -42,20 +42,35 @@
         }
 
         /**
-         * Fetch wrapper seguro con inyección de headers (Nonce, Auth y Acción)
+         * Fetch wrapper seguro con inyección de headers (Nonce, Auth y Acción).
+         * 
+         * Soporta dos modos:
+         *   1. JSON   — payload es un objeto literal: { nombre, data_json, ... }
+         *   2. Binario — payload es un FormData (para subidas de archivos)
+         *               En este modo NO se fuerza Content-Type para que el navegador
+         *               establezca el boundary correcto del multipart.
          */
         window.fetchSeguro = async function(actionName, payload = {}) {
             try {
-                const response = await fetch('ajaxGateway', {
+                const isBinary = payload instanceof FormData;
+
+                const requestInit = {
                     method: 'POST',
                     headers: {
-                        'Content-Type': 'application/json',
                         'X-Authorization-Key': window.AUTH_KEY,
                         'X-Nonce': window.AJAX_NONCE,
                         'X-Action': actionName
+                        // Content-Type se omite en modo binario (el browser lo pone con el boundary)
                     },
-                    body: JSON.stringify(payload)
-                });
+                    body: isBinary ? payload : JSON.stringify(payload)
+                };
+
+                // Solo agregamos Content-Type para peticiones JSON
+                if (!isBinary) {
+                    requestInit.headers['Content-Type'] = 'application/json';
+                }
+
+                const response = await fetch('ajaxGateway', requestInit);
                 
                 // Si el servidor responde con 403 u otro error HTTP
                 if (!response.ok) {
@@ -231,8 +246,9 @@
     </script>
 
         /**
-         * Guarda el video renderizado en el servidor via Gateway AJAX seguro.
-         * Pide al usuario el nombre, remate y lote antes de enviar.
+         * Guarda el video renderizado en el servidor vía Gateway AJAX seguro.
+         * Usa FormData + Blob binario (NO base64) para soportar videos de hasta 5 min.
+         * Incluye el JSON del canvas evaluado (con valores reales) para trazabilidad.
          */
         window.saveVideoToServer = async function() {
             const blobUrl = window.AppState && window.AppState.lastRenderBlobUrl;
@@ -241,7 +257,7 @@
                 return;
             }
 
-            // Obtener datos dinámicos de las variables actuales
+            // Pre-llenar con valores de las variables dinámicas actuales
             const vars = window.VARIABLES_DINAMICAS || {};
             const defaultNombre = vars['ARCHIVO'] || 'video';
             const defaultRemate = vars['LOT_NUMERO'] || '';
@@ -259,43 +275,43 @@
             const statusEl = document.getElementById('save-server-status');
             const saveBtn  = document.getElementById('render-video-save-server');
 
-            // UI: loading
-            if (statusEl) { statusEl.style.display = 'block'; statusEl.style.background = '#1e293b'; statusEl.style.color = '#93c5fd'; statusEl.innerText = '⏳ Subiendo video al servidor...'; }
+            if (statusEl) { statusEl.style.display = 'block'; statusEl.style.background = '#1e293b'; statusEl.style.color = '#93c5fd'; statusEl.innerText = '⏳ Preparando y subiendo video...'; }
             if (saveBtn) saveBtn.disabled = true;
 
             try {
-                // Convertir Blob URL a base64
-                const response = await fetch(blobUrl);
-                const blob     = await response.blob();
+                // 1. Obtener el Blob binario directamente desde la URL de memoria
+                const fetchResp = await fetch(blobUrl);
+                const videoBlob = await fetchResp.blob(); // Blob MP4 puro, sin conversión
 
-                const base64 = await new Promise((resolve, reject) => {
-                    const reader = new FileReader();
-                    reader.onload  = () => resolve(reader.result);
-                    reader.onerror = reject;
-                    reader.readAsDataURL(blob);
-                });
+                // 2. JSON del canvas evaluado (valores reales, sin {{variables}})
+                const evaluatedJson = window.generateJson ? window.generateJson() : null;
+                const dataJsonStr   = evaluatedJson ? JSON.stringify(evaluatedJson) : '';
 
                 const templateId = window.ACTIVE_TEMPLATE_ID ? parseInt(window.ACTIVE_TEMPLATE_ID) : 0;
 
-                const res = await window.fetchSeguro('VideoController@saveAction', {
-                    nombre:       nombre,
-                    video_base64: base64,
-                    template_id:  templateId,
-                    remate:       remate,
-                    lote:         lote
-                });
+                // 3. Construir FormData con binario
+                const formData = new FormData();
+                formData.append('video_file',  videoBlob, nombre + '.mp4'); // Blob como File binario
+                formData.append('nombre',      nombre);
+                formData.append('remate',      remate);
+                formData.append('lote',        lote);
+                formData.append('template_id', templateId);
+                formData.append('data_json',   dataJsonStr);
+
+                // 4. Subir vía fetchSeguro (detecta FormData automáticamente)
+                const res = await window.fetchSeguro('VideoController@saveAction', formData);
 
                 if (res && res.success) {
                     if (statusEl) {
                         statusEl.style.background = '#052e16';
                         statusEl.style.color = '#86efac';
-                        statusEl.innerText = `✅ Video guardado: ${res.nombre_archivo} (${res.tamano_kb} KB)`;
+                        statusEl.innerText = `✅ Guardado: ${res.nombre_archivo} (${res.tamano_kb} KB)`;
                     }
                     if (res.warning) console.warn("Video API:", res.warning);
                 } else if (res) {
-                    if (statusEl) { statusEl.style.background = '#2d1515'; statusEl.style.color = '#fca5a5'; statusEl.innerText = `❌ Error: ${res.error}`; }
+                    if (statusEl) { statusEl.style.background = '#2d1515'; statusEl.style.color = '#fca5a5'; statusEl.innerText = `❌ ${res.error}`; }
                 } else {
-                    if (statusEl) { statusEl.style.background = '#2d1515'; statusEl.style.color = '#fca5a5'; statusEl.innerText = '❌ Error de conexión al guardar.'; }
+                    if (statusEl) { statusEl.style.background = '#2d1515'; statusEl.style.color = '#fca5a5'; statusEl.innerText = '❌ Error de conexión.'; }
                 }
             } catch(e) {
                 console.error("saveVideoToServer:", e);

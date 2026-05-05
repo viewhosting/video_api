@@ -11,7 +11,11 @@ class AjaxGatewayController extends Controller {
         header('Content-Type: application/json');
 
         try {
+            // Detectar si la petición es multipart (subida de archivo binario)
+            $isMultipart = isset($_SERVER['CONTENT_TYPE']) && str_contains($_SERVER['CONTENT_TYPE'], 'multipart/form-data');
+
             // 1. Validar la llave de autorización
+            // En multipart los headers siguen llegando como HTTP headers normales
             $headers = getallheaders();
             $authKeyHeader = $headers['X-Authorization-Key'] ?? ($headers['x-authorization-key'] ?? '');
             

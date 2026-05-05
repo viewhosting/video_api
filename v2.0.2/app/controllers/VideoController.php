@@ -6,74 +6,93 @@ namespace Controllers;
  * VideoController
  * Gestiona el guardado de videos renderizados en el servidor.
  * Accesible únicamente a través del AjaxGatewayController.
+ *
+ * Recibe upload BINARIO vía multipart/form-data (FormData desde JS).
+ * Los headers de seguridad (X-Nonce, X-Action, X-Authorization-Key) 
+ * los sigue validando el Gateway antes de despachar aquí.
  */
 class VideoController extends Controller {
 
+    /**
+     * Tipos MIME permitidos para subida de video.
+     * Se valida contra el contenido real del archivo (finfo), NO la extensión.
+     */
+    private const ALLOWED_MIME_TYPES = [
+        'video/mp4'  => 'mp4',
+        'video/webm' => 'webm',
+        'video/quicktime' => 'mov',
+    ];
+
+    /** Tamaño máximo permitido: 500 MB */
+    private const MAX_FILE_SIZE_BYTES = 500 * 1024 * 1024;
+
     public function defaultAction() {
-        // Esta acción no es de uso directo
         return ['success' => false, 'error' => 'Acceso no permitido directamente.'];
     }
 
     /**
-     * Recibe un video en base64 o binario y lo guarda en private_videos/.
-     * Espera los siguientes campos en el body JSON:
-     *   - nombre       : string  — nombre dado por el usuario
-     *   - video_base64 : string  — video en base64 (data:video/mp4;base64,...)
-     *   - template_id  : int     — ID del template JSON utilizado
-     *   - remate       : string  — número/nombre del remate
-     *   - lote         : string  — número/nombre del lote
+     * Recibe un video binario via multipart/form-data y lo guarda en private_videos/.
+     *
+     * Campos esperados (FormData):
+     *   - video_file  : File  — el binario del video (campo de archivo)
+     *   - nombre      : string — nombre dado por el usuario
+     *   - remate      : string — número/nombre del remate
+     *   - lote        : string — número/nombre del lote
+     *   - data_json   : string — JSON serializado del canvas (ya con valores reales, sin {{variables}})
      */
     private function saveAction() {
         $this->validarAcceso();
-        $data = json_decode(file_get_contents('php://input'), true);
 
-        if (!$data) {
-            return ['success' => false, 'error' => 'Payload inválido.'];
+        // --- Leer campos de texto del multipart ---
+        $nombreUsuario = isset($_POST['nombre'])    ? trim($_POST['nombre'])   : 'video';
+        $remate        = isset($_POST['remate'])    ? trim($_POST['remate'])   : 'sin_remate';
+        $lote          = isset($_POST['lote'])      ? trim($_POST['lote'])     : 'sin_lote';
+        $dataJson      = isset($_POST['data_json']) ? trim($_POST['data_json']): '';
+
+        // --- Validar que llegó el archivo ---
+        if (!isset($_FILES['video_file']) || $_FILES['video_file']['error'] !== UPLOAD_ERR_OK) {
+            $errCode = $_FILES['video_file']['error'] ?? -1;
+            return ['success' => false, 'error' => "No se recibió el archivo de video (código: {$errCode})."];
         }
 
-        $nombreUsuario  = $data['nombre']       ?? 'video';
-        $videoBase64    = $data['video_base64']  ?? '';
-        $templateId     = (int)($data['template_id'] ?? 0);
-        $remate         = $data['remate']        ?? 'sin_remate';
-        $lote           = $data['lote']          ?? 'sin_lote';
+        $file = $_FILES['video_file'];
 
-        if (empty($videoBase64)) {
-            return ['success' => false, 'error' => 'No se recibió el video.'];
+        // --- Validar tamaño ---
+        if ($file['size'] > self::MAX_FILE_SIZE_BYTES) {
+            return ['success' => false, 'error' => 'El archivo excede el tamaño máximo permitido (500 MB).'];
         }
+
+        // --- Validar MIME real (desde el contenido binario, no la extensión) ---
+        $finfo    = new \finfo(FILEINFO_MIME_TYPE);
+        $mimeReal = $finfo->file($file['tmp_name']);
+
+        if (!array_key_exists($mimeReal, self::ALLOWED_MIME_TYPES)) {
+            return [
+                'success' => false,
+                'error'   => "Tipo de archivo no permitido ({$mimeReal}). Solo se aceptan: " . implode(', ', array_keys(self::ALLOWED_MIME_TYPES))
+            ];
+        }
+
+        $extension = self::ALLOWED_MIME_TYPES[$mimeReal];
 
         // --- Sanitizar partes del nombre ---
         $sanitize = function(string $str): string {
-            $str = iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', $str);
+            $str = iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', $str) ?: $str;
             $str = strtolower(preg_replace('/[^a-zA-Z0-9_\-]/', '_', $str));
-            return trim($str, '_');
+            return trim($str, '_') ?: 'valor';
         };
 
-        $nombreSanitized = $sanitize($nombreUsuario);
-        $remateSanitized = $sanitize($remate);
-        $loteSanitized   = $sanitize($lote);
-        $timestamp       = time();
-
-        // Formato: nombre_remate-REMATE_lote-LOTE_tpl-TEMPLATE_ID_1746123456.mp4
-        $fileName = sprintf(
-            '%s_remate-%s_lote-%s_tpl-%d_%d.mp4',
-            $nombreSanitized,
-            $remateSanitized,
-            $loteSanitized,
-            $templateId,
-            $timestamp
+        $timestamp = time();
+        $fileName  = sprintf(
+            '%s_remate-%s_lote-%s_%d.%s',
+            $sanitize($nombreUsuario),
+            $sanitize($remate),
+            $sanitize($lote),
+            $timestamp,
+            $extension
         );
 
-        // --- Decodificar base64 ---
-        // Soporta data URI: "data:video/mp4;base64,XXXXX" o base64 puro
-        if (strpos($videoBase64, ';base64,') !== false) {
-            [, $videoBase64] = explode(';base64,', $videoBase64);
-        }
-        $videoBinary = base64_decode(str_replace(' ', '+', $videoBase64));
-        if ($videoBinary === false || strlen($videoBinary) < 100) {
-            return ['success' => false, 'error' => 'Decodificación de video fallida.'];
-        }
-
-        // --- Guardar en disco ---
+        // --- Guardar en disco (movemos el temporal de PHP, 100% binario) ---
         $saveDir  = \Services\Config::getInstance()->get('document_root') . '/video_/v2.0.2/private_videos/';
         $filePath = $saveDir . $fileName;
 
@@ -81,23 +100,27 @@ class VideoController extends Controller {
             mkdir($saveDir, 0755, true);
         }
 
-        if (file_put_contents($filePath, $videoBinary) === false) {
-            return ['success' => false, 'error' => 'No se pudo escribir el archivo en el servidor.'];
+        if (!move_uploaded_file($file['tmp_name'], $filePath)) {
+            return ['success' => false, 'error' => 'No se pudo mover el archivo al destino.'];
         }
 
         $fileSizeKb = round(filesize($filePath) / 1024);
 
-        // --- Guardar registro en BD ---
+        // --- Obtener el template_id del ACTIVE_TEMPLATE_ID si viene en POST ---
+        $templateId = (int)($_POST['template_id'] ?? 0);
+
+        // --- Guardar registro en BD con el JSON evaluado ---
         $idCliente = $_SESSION['usuario']['idClientes'] ?? 0;
 
         try {
             $this->base->executeStatement(
                 "INSERT INTO video_renders 
-                    (idClientes, template_id, nombre_usuario, remate, lote, nombre_archivo, tamano_kb, fecha_creacion) 
-                 VALUES (?, ?, ?, ?, ?, ?, ?, NOW())",
+                    (idClientes, template_id, data_json, nombre_usuario, remate, lote, nombre_archivo, tamano_kb, fecha_creacion) 
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())",
                 [
                     $idCliente,
                     $templateId,
+                    $dataJson,        // JSON con valores reales resueltos
                     $nombreUsuario,
                     $remate,
                     $lote,
@@ -106,12 +129,12 @@ class VideoController extends Controller {
                 ]
             );
         } catch (\Exception $e) {
-            // Si falla la BD, el archivo ya está guardado, lo reportamos pero no bloqueamos
+            // El archivo está guardado; reportamos warning pero no bloqueamos
             return [
-                'success'       => true,
-                'warning'       => 'Video guardado pero fallo registro en BD: ' . $e->getMessage(),
+                'success'        => true,
+                'warning'        => 'Video guardado pero falló registro en BD: ' . $e->getMessage(),
                 'nombre_archivo' => $fileName,
-                'tamano_kb'     => $fileSizeKb
+                'tamano_kb'      => $fileSizeKb
             ];
         }
 
