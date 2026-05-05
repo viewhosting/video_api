@@ -43,6 +43,18 @@ class CorrerController extends Controller {
         $_SESSION['proxy_token'] = $token;
         $_SESSION['proxy_token_expire'] = time() + 3600;
 
+        // 4. Generamos Nonce inicial para AJAX
+        $nonce = bin2hex(random_bytes(16));
+        $_SESSION['nonce_ajax'] = $nonce;
+        $encryptedNonce = $this->_encriptar($nonce);
+        $authKey = \Services\Config::getInstance()->get('authorization_key');
+
+        // 5. NUEVO TOKEN PARA RE-APERTURA (Mismo formato que AccesoController)
+        $newReopenNonce = bin2hex(random_bytes(16));
+        $_SESSION['video_nonce'] = $newReopenNonce;
+        $reopenPayload = time() . "|$newReopenNonce";
+        $reopenToken = $this->_encriptar($reopenPayload);
+
         $proxyBase = \Services\Config::getInstance()->get('domain') . "/proxy/" . $token;
         $publicBase = \Services\Config::getInstance()->get('domain') . "/ffmpeg/lib"; // Ruta pública fija para caché
 
@@ -56,6 +68,9 @@ class CorrerController extends Controller {
             'js_ffmpeg_core'     => $publicBase . "/ffmpeg-core.js",
             'wasm_ffmpeg_core'   => $publicBase . "/ffmpeg-core.wasm",
             'worker_ffmpeg_core' => $publicBase . "/ffmpeg-core.worker.js",
+            'encrypted_nonce'    => $encryptedNonce,
+            'authorization_key'  => $authKey,
+            'reopen_token'       => $reopenToken,
             'templates'          => $templates,
             'variables'          => [
                                         'dinamicas' => [        

@@ -29,7 +29,58 @@
     
     <script>
         window.ACTIVE_TEMPLATE_ID = null;
+        window.AJAX_NONCE = "{{ encrypted_nonce }}";
+        window.AUTH_KEY = "{{ authorization_key }}";
         window.VARIABLES_DINAMICAS = {{ variables.dinamicas | json_encode | raw }};
+
+        // Comunicar al padre el nuevo token para re-aperturas exitosas
+        if (window.opener) {
+            window.opener.postMessage({
+                function: "AccesoVideoOK", 
+                nuevo_token: "{{ reopen_token }}"
+            }, "*");
+        }
+
+        /**
+         * Fetch wrapper seguro con inyección de headers (Nonce, Auth y Acción)
+         */
+        window.fetchSeguro = async function(actionName, payload = {}) {
+            try {
+                const response = await fetch('ajaxGateway', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Authorization-Key': window.AUTH_KEY,
+                        'X-Nonce': window.AJAX_NONCE,
+                        'X-Action': actionName
+                    },
+                    body: JSON.stringify(payload)
+                });
+                
+                // Si el servidor responde con 403 u otro error HTTP
+                if (!response.ok) {
+                    throw new Error("HTTP " + response.status);
+                }
+
+                const json = await response.json();
+                
+                if (json.error === 'SECURITY_VIOLATION') {
+                    alert("Se ha detectado una anomalía de seguridad o la sesión caducó.");
+                    window.close(); // El padre limpiará la pantalla
+                    return null;
+                }
+
+                if (json.__new_nonce) {
+                    window.AJAX_NONCE = json.__new_nonce;
+                }
+
+                return json;
+            } catch (e) {
+                console.error("Error en fetchSeguro:", e);
+                alert("Error de conexión seguro.");
+                return null;
+            }
+        };
         
         window.evaluateVariables = function(text) {
             if (!text || typeof text !== 'string') return text;
@@ -101,21 +152,16 @@
             const thumb = window.AppState.canvas.toDataURL({ format: 'jpeg', quality: 0.5 });
 
             try {
-                const response = await fetch('templates/save', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        nombre: nombre,
-                        data_json: JSON.stringify(json),
-                        thumbnail: thumb
-                    })
+                const res = await window.fetchSeguro('TemplatesController@saveAction', {
+                    nombre: nombre,
+                    data_json: JSON.stringify(json),
+                    thumbnail: thumb
                 });
 
-                const res = await response.json();
-                if (res.success) {
+                if (res && res.success) {
                     alert("Plantilla guardada con éxito.");
                     location.reload(); // Recargamos para ver la nueva en la lista
-                } else {
+                } else if (res) {
                     alert("Error al guardar: " + res.error);
                 }
             } catch (e) {
@@ -136,20 +182,17 @@
             const thumb = window.AppState.canvas.toDataURL({ format: 'jpeg', quality: 0.5 });
 
             try {
-                const response = await fetch('templates/update', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        id: window.ACTIVE_TEMPLATE_ID,
-                        data_json: JSON.stringify(json),
-                        thumbnail: thumb
-                    })
+                const res = await window.fetchSeguro('TemplatesController@updateAction', {
+                    id: window.ACTIVE_TEMPLATE_ID,
+                    data_json: JSON.stringify(json),
+                    thumbnail: thumb
                 });
 
-                const res = await response.json();
-                if (res.success) {
+                if (res && res.success) {
                     alert("Cambios guardados correctamente.");
                     location.reload();
+                } else if (res) {
+                    alert("Error al actualizar: " + res.error);
                 }
             } catch (e) { alert("Error al actualizar."); }
         };
@@ -159,14 +202,11 @@
          */
         window.duplicateTemplate = async function(id) {
             try {
-                const response = await fetch('templates/duplicate', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ id: id })
-                });
-                const res = await response.json();
-                if (res.success) {
+                const res = await window.fetchSeguro('TemplatesController@duplicateAction', { id: id });
+                if (res && res.success) {
                     location.reload();
+                } else if (res) {
+                    alert("Error al duplicar: " + res.error);
                 }
             } catch (e) { alert("Error al duplicar."); }
         };
@@ -179,17 +219,90 @@
             if (!confirm("¿Realmente deseas ELIMINAR esta plantilla de forma permanente?")) return;
 
             try {
-                const response = await fetch('templates/delete', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ id: window.ACTIVE_TEMPLATE_ID })
-                });
-                const res = await response.json();
-                if (res.success) {
+                const res = await window.fetchSeguro('TemplatesController@deleteAction', { id: window.ACTIVE_TEMPLATE_ID });
+                if (res && res.success) {
                     alert("Eliminada correctamente.");
                     location.reload();
+                } else if (res) {
+                    alert("Error al eliminar: " + res.error);
                 }
             } catch (e) { alert("Error al eliminar."); }
+        };
+    </script>
+
+        /**
+         * Guarda el video renderizado en el servidor via Gateway AJAX seguro.
+         * Pide al usuario el nombre, remate y lote antes de enviar.
+         */
+        window.saveVideoToServer = async function() {
+            const blobUrl = window.AppState && window.AppState.lastRenderBlobUrl;
+            if (!blobUrl) {
+                alert("No hay video renderizado disponible. Genera el video primero.");
+                return;
+            }
+
+            // Obtener datos dinámicos de las variables actuales
+            const vars = window.VARIABLES_DINAMICAS || {};
+            const defaultNombre = vars['ARCHIVO'] || 'video';
+            const defaultRemate = vars['LOT_NUMERO'] || '';
+            const defaultLote   = vars['CATEGORIA_GANADO'] || '';
+
+            const nombre = prompt("Nombre del video:", defaultNombre);
+            if (!nombre) return;
+
+            const remate = prompt("Remate / Evento:", defaultRemate);
+            if (remate === null) return;
+
+            const lote = prompt("Lote / Categoría:", defaultLote);
+            if (lote === null) return;
+
+            const statusEl = document.getElementById('save-server-status');
+            const saveBtn  = document.getElementById('render-video-save-server');
+
+            // UI: loading
+            if (statusEl) { statusEl.style.display = 'block'; statusEl.style.background = '#1e293b'; statusEl.style.color = '#93c5fd'; statusEl.innerText = '⏳ Subiendo video al servidor...'; }
+            if (saveBtn) saveBtn.disabled = true;
+
+            try {
+                // Convertir Blob URL a base64
+                const response = await fetch(blobUrl);
+                const blob     = await response.blob();
+
+                const base64 = await new Promise((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onload  = () => resolve(reader.result);
+                    reader.onerror = reject;
+                    reader.readAsDataURL(blob);
+                });
+
+                const templateId = window.ACTIVE_TEMPLATE_ID ? parseInt(window.ACTIVE_TEMPLATE_ID) : 0;
+
+                const res = await window.fetchSeguro('VideoController@saveAction', {
+                    nombre:       nombre,
+                    video_base64: base64,
+                    template_id:  templateId,
+                    remate:       remate,
+                    lote:         lote
+                });
+
+                if (res && res.success) {
+                    if (statusEl) {
+                        statusEl.style.background = '#052e16';
+                        statusEl.style.color = '#86efac';
+                        statusEl.innerText = `✅ Video guardado: ${res.nombre_archivo} (${res.tamano_kb} KB)`;
+                    }
+                    if (res.warning) console.warn("Video API:", res.warning);
+                } else if (res) {
+                    if (statusEl) { statusEl.style.background = '#2d1515'; statusEl.style.color = '#fca5a5'; statusEl.innerText = `❌ Error: ${res.error}`; }
+                } else {
+                    if (statusEl) { statusEl.style.background = '#2d1515'; statusEl.style.color = '#fca5a5'; statusEl.innerText = '❌ Error de conexión al guardar.'; }
+                }
+            } catch(e) {
+                console.error("saveVideoToServer:", e);
+                if (statusEl) { statusEl.style.background = '#2d1515'; statusEl.style.color = '#fca5a5'; statusEl.innerText = '❌ Error: ' + e.message; }
+            } finally {
+                if (saveBtn) saveBtn.disabled = false;
+            }
         };
     </script>
 
@@ -1315,14 +1428,22 @@
             </div>
             <div id="render-video-wrap" style="display: none;">
                 <video id="render-video" controls style="width: 100%; max-height: 60vh; background: #000;"></video>
-                <div style="margin-top: 15px; display: flex; justify-content: space-between; align-items: center;">
+                <div style="margin-top: 15px; display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap;">
                     <a id="render-video-link" href="#" target="_blank"
                         style="color: #9cf; text-decoration: underline; font-size: 0.9rem;">Ver en pantalla completa</a>
-                    <a id="render-video-download" href="#" download="video_renderizado.mp4" class="btn"
-                        style="background: #22c55e;">
-                        <i class="fas fa-download"></i> Descargar Video
-                    </a>
+                    <div style="display: flex; gap: 10px;">
+                        <a id="render-video-download" href="#" download="video_renderizado.mp4" class="btn"
+                            style="background: #22c55e;">
+                            <i class="fas fa-download"></i> Descargar Video
+                        </a>
+                        <button id="render-video-save-server" class="btn"
+                            style="background: #4f46e5; cursor: pointer; border: none;"
+                            onclick="window.saveVideoToServer()">
+                            <i class="fas fa-cloud-upload-alt"></i> Guardar en Servidor
+                        </button>
+                    </div>
                 </div>
+                <div id="save-server-status" style="display:none; margin-top: 10px; font-size: 0.85rem; padding: 8px 12px; border-radius: 6px;"></div>
             </div>
             <pre id="render-error"
                 style="display: none; background: #111; color: #f88; border: 1px solid #333; padding: 15px; border-radius: 6px; max-height: 60vh; overflow: auto;"></pre>

@@ -85,9 +85,12 @@ class AccesoController extends Controller {
             // Consumir el nonce actual
             unset($_SESSION['video_nonce']);
 
-            // 5. VALIDACIÓN DE TIEMPO (Handshake de máximo 60 segundos)
-            // Recuerda que este tiempo empieza a correr cuando carga el JS en el HTML
-            if (abs(time() - $timestamp) > 60) {
+            // 5. VALIDACIÓN DE TIEMPO
+            // Si el usuario ya estaba logueado en esta sesión, le damos 24 horas. Si es nueva petición, 60 segundos.
+            $isLoggedIn = isset($_SESSION['logueo']) && $_SESSION['logueo'] === true;
+            $maxTime = $isLoggedIn ? 86400 : 60; 
+            
+            if (abs(time() - $timestamp) > $maxTime) {
                 throw new \Exception("La llave de acceso ha expirado por inactividad. Por favor, recarga la página para generar una nueva.");
             }
 
@@ -101,8 +104,6 @@ class AccesoController extends Controller {
                     'allowed' => $allowedDomain
                 ]);
 
-
-
                 $this->guardarLog([
                     'error' => 'Referer no coincide',
                     'referer' => $referer,
@@ -112,7 +113,6 @@ class AccesoController extends Controller {
             }
 
             // 4. VALIDACIÓN EN BASE DE DATOS
-            // Cruzamos con la tabla dominios__ para verificar que el dominio esté autorizado para ese cliente
             $cliente = $this->base->fetchAssociative("
                 SELECT c.*, d.dominio as dominio_config 
                 FROM clientes c 
@@ -121,11 +121,6 @@ class AccesoController extends Controller {
                 AND c.Activo = 1 
                 AND d.dominio LIKE ?
             ", [$clientId, "%$allowedDomain%"]);
-
-            // print_r($clientId);
-            // print_r('<br>');
-            // print_r($allowedDomain);
-            // exit;
 
             if (!$cliente) {
                 throw new \Exception("Cliente no autorizado o configuración de dominio no coincide.");
@@ -148,34 +143,10 @@ class AccesoController extends Controller {
                 'dominio' => $allowedDomain
             ];
 
-            // 8. ROTACIÓN DE NONCE
-            // Generamos un nuevo token 't' para enviarlo al padre
-            $newNonce = bin2hex(random_bytes(16));
-            $_SESSION['video_nonce'] = $newNonce;
-            
-            $payload = time() . "|$newNonce";
-            $newToken = $this->_encriptar($payload);
-
             $this->guardarLog("Handshake exitoso: Cliente #{$clientId} [{$cliente['Nombre']}] desde {$allowedDomain}", 'auth_success');
 
-            // Enviamos el nuevo TOKEN al padre y redirigimos la ventana actual al editor
-            echo <<<HTML
-            <!DOCTYPE html>
-            <html>
-            <head><title>Autenticando...</title></head>
-            <body>
-                <script>
-                    if (window.opener) {
-                        window.opener.postMessage({
-                            function: "AccesoVideoOK", 
-                            nuevo_token: "{$newToken}"
-                        }, "*");
-                    }
-                    window.location.href = "/video_/correr";
-                </script>
-            </body>
-            </html>
-            HTML;
+            // Redirigimos al editor directamente. CorrerController se encargará de mandar el nuevo token al padre.
+            header('Location: ' . \Services\Config::getInstance()->get('domain') . '/correr');
             exit;
 
         } catch (\Exception $e) {
