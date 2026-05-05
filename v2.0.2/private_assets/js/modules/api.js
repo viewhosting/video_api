@@ -68,6 +68,48 @@ window.closeRenderModal = function () {
     modal.style.display = 'none';
     window.AppState.renderModalHidden = false;
     if (fab) fab.style.display = 'none';
+
+    // Resetear UI para el próximo render
+    const renderStatus = document.getElementById('render-status');
+    if (renderStatus) renderStatus.style.display = 'block';
+
+    const statusText = document.getElementById('render-status-text');
+    if (statusText) statusText.innerText = 'Generando…';
+
+    const progressContainer = document.getElementById('render-progress-bar-container');
+    if (progressContainer) progressContainer.style.display = 'none';
+
+    const bar = document.getElementById('render-progress-bar');
+    if (bar) bar.style.width = '0%';
+
+    const logContainer = document.getElementById('render-log');
+    if (logContainer) { logContainer.style.display = 'none'; logContainer.innerHTML = ''; }
+
+    const videoWrap = document.getElementById('render-video-wrap');
+    if (videoWrap) videoWrap.style.display = 'none';
+
+    const errorPre = document.getElementById('render-error');
+    if (errorPre) errorPre.style.display = 'none';
+
+    const saveStatus = document.getElementById('save-server-status');
+    if (saveStatus) { saveStatus.style.display = 'none'; saveStatus.innerText = ''; }
+
+    // Resetear boton de descarga al estado inicial (deshabilitado con spinner)
+    window._dlUploadState = 'idle';
+    const dlBtn = document.getElementById('render-video-download-btn');
+    if (dlBtn) {
+        dlBtn.disabled = true;
+        dlBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> &#x23F3; Preparando para descargar video... espere por favor.';
+        dlBtn.style.background = '#374151';
+        dlBtn.style.cursor = 'not-allowed';
+        dlBtn.onclick = null;
+    }
+    const uploadBar = document.getElementById('upload-progress-wrap');
+    if (uploadBar) uploadBar.style.display = 'none';
+    const uploadLabel = document.getElementById('upload-progress-label');
+    if (uploadLabel) uploadLabel.innerText = '0%';
+    const uploadPb = document.getElementById('upload-progress-bar');
+    if (uploadPb) uploadPb.style.width = '0%';
 }
 
 window.minimizeRenderModal = function () {

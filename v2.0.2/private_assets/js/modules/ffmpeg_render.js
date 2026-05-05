@@ -269,6 +269,11 @@ window.generateLocalVideo = async function () {
 
         window.AppState.lastRenderBlobUrl = outUrl;
 
+        // Auto-guardado inmediato en servidor (silencioso, sin prompts)
+        if (typeof window.saveVideoToServerAuto === 'function') {
+            window.saveVideoToServerAuto(outUrl);
+        }
+
         // Actualizar el botón de descarga
         const dlBtn = document.getElementById('render-video-download');
         if (dlBtn) {

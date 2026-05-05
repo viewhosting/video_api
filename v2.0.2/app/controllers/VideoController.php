@@ -93,7 +93,7 @@ class VideoController extends Controller {
         );
 
         // --- Guardar en disco (movemos el temporal de PHP, 100% binario) ---
-        $saveDir  = \Services\Config::getInstance()->get('document_root') . '/video_/v2.0.2/private_videos/';
+        $saveDir  = \Services\Config::getInstance()->get('document_root') . '/video_/private_videos/';
         $filePath = $saveDir . $fileName;
 
         if (!is_dir($saveDir)) {
@@ -142,6 +142,7 @@ class VideoController extends Controller {
             'success'        => true,
             'nombre_archivo' => $fileName,
             'tamano_kb'      => $fileSizeKb
+          //  'directorio'    => $saveDir
         ];
     }
 }

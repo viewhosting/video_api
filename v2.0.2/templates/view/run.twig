@@ -42,59 +42,65 @@
         }
 
         /**
-         * Fetch wrapper seguro con inyección de headers (Nonce, Auth y Acción).
-         * 
-         * Soporta dos modos:
-         *   1. JSON   — payload es un objeto literal: { nombre, data_json, ... }
-         *   2. Binario — payload es un FormData (para subidas de archivos)
-         *               En este modo NO se fuerza Content-Type para que el navegador
-         *               establezca el boundary correcto del multipart.
+         * Cola serial de peticiones: garantiza que solo una peticion segura
+         * este en vuelo a la vez, evitando race conditions en el nonce rotativo.
          */
-        window.fetchSeguro = async function(actionName, payload = {}) {
-            try {
-                const isBinary = payload instanceof FormData;
+        window._fetchSeguroQueue = Promise.resolve();
 
-                const requestInit = {
-                    method: 'POST',
-                    headers: {
-                        'X-Authorization-Key': window.AUTH_KEY,
-                        'X-Nonce': window.AJAX_NONCE,
-                        'X-Action': actionName
-                        // Content-Type se omite en modo binario (el browser lo pone con el boundary)
-                    },
-                    body: isBinary ? payload : JSON.stringify(payload)
-                };
+        /**
+         * Fetch wrapper seguro con inyeccion de headers (Nonce, Auth y Accion).
+         * Serializa automaticamente todas las llamadas para que el nonce
+         * siempre este actualizado antes de cada peticion.
+         */
+        window.fetchSeguro = function(actionName, payload = {}) {
+            const task = window._fetchSeguroQueue.then(async () => {
+                try {
+                    const isBinary = payload instanceof FormData;
 
-                // Solo agregamos Content-Type para peticiones JSON
-                if (!isBinary) {
-                    requestInit.headers['Content-Type'] = 'application/json';
-                }
+                    const requestInit = {
+                        method: 'POST',
+                        headers: {
+                            'X-Authorization-Key': window.AUTH_KEY,
+                            'X-Nonce': window.AJAX_NONCE,
+                            'X-Action': actionName
+                        },
+                        body: isBinary ? payload : JSON.stringify(payload)
+                    };
 
-                const response = await fetch('ajaxGateway', requestInit);
-                
-                // Si el servidor responde con 403 u otro error HTTP
-                if (!response.ok) {
-                    throw new Error("HTTP " + response.status);
-                }
+                    if (!isBinary) {
+                        requestInit.headers['Content-Type'] = 'application/json';
+                    }
 
-                const json = await response.json();
-                
-                if (json.error === 'SECURITY_VIOLATION') {
-                    alert("Se ha detectado una anomalía de seguridad o la sesión caducó.");
-                    window.close(); // El padre limpiará la pantalla
+                    const response = await fetch('ajaxGateway', requestInit);
+
+                    if (!response.ok) {
+                        throw new Error("HTTP " + response.status);
+                    }
+
+                    const json = await response.json();
+
+                    if (json.error === 'SECURITY_VIOLATION') {
+                        alert("Anomalia de seguridad o sesion caducada.");
+                        window.close();
+                        return null;
+                    }
+
+                    // Actualizar el nonce ANTES de liberar la cola
+                    if (json.__new_nonce) {
+                        window.AJAX_NONCE = json.__new_nonce;
+                    }
+
+                    return json;
+                } catch (e) {
+                    console.error("Error en fetchSeguro:", e);
+                    alert("Error de conexion seguro.");
                     return null;
                 }
+            });
 
-                if (json.__new_nonce) {
-                    window.AJAX_NONCE = json.__new_nonce;
-                }
-
-                return json;
-            } catch (e) {
-                console.error("Error en fetchSeguro:", e);
-                alert("Error de conexión seguro.");
-                return null;
-            }
+            // La cola avanza aunque la tarea falle (no se bloquea para siempre)
+            window._fetchSeguroQueue = task.catch(() => {});
+            return task;
         };
         
         window.evaluateVariables = function(text) {
@@ -243,82 +249,162 @@
                 }
             } catch (e) { alert("Error al eliminar."); }
         };
-    </script>
 
         /**
-         * Guarda el video renderizado en el servidor vía Gateway AJAX seguro.
-         * Usa FormData + Blob binario (NO base64) para soportar videos de hasta 5 min.
-         * Incluye el JSON del canvas evaluado (con valores reales) para trazabilidad.
+         * Sube el video al servidor via XHR para obtener progreso real de subida.
+         * Respeta el nonce queue igual que fetchSeguro.
          */
-        window.saveVideoToServer = async function() {
-            const blobUrl = window.AppState && window.AppState.lastRenderBlobUrl;
-            if (!blobUrl) {
-                alert("No hay video renderizado disponible. Genera el video primero.");
-                return;
+        window.uploadVideoConProgreso = function(formData, onProgress) {
+            const task = window._fetchSeguroQueue.then(() => {
+                return new Promise((resolve, reject) => {
+                    const xhr = new XMLHttpRequest();
+                    xhr.open('POST', 'ajaxGateway', true);
+                    xhr.setRequestHeader('X-Authorization-Key', window.AUTH_KEY);
+                    xhr.setRequestHeader('X-Nonce', window.AJAX_NONCE);
+                    xhr.setRequestHeader('X-Action', 'VideoController@saveAction');
+                    // No ponemos Content-Type: el navegador agrega el boundary del multipart
+
+                    xhr.upload.onprogress = function(e) {
+                        if (e.lengthComputable && onProgress) {
+                            onProgress(Math.round((e.loaded / e.total) * 100));
+                        }
+                    };
+
+                    xhr.onload = function() {
+                        try {
+                            const json = JSON.parse(xhr.responseText);
+                            if (json.__new_nonce) window.AJAX_NONCE = json.__new_nonce;
+                            resolve(json);
+                        } catch(e) { reject(new Error('Respuesta invalida del servidor')); }
+                    };
+
+                    xhr.onerror = function() { reject(new Error('Error de red al subir')); };
+                    xhr.send(formData);
+                });
+            });
+
+            window._fetchSeguroQueue = task.catch(() => {});
+            return task;
+        };
+
+        /**
+         * Helpers de UI para el boton de descarga
+         */
+        window._dlUploadState = 'idle'; // 'idle' | 'uploading' | 'done' | 'error'
+
+        window._setDownloadBtnUploading = function() {
+            window._dlUploadState = 'uploading';
+            const btn = document.getElementById('render-video-download-btn');
+            const bar = document.getElementById('upload-progress-wrap');
+            if (btn) {
+                btn.disabled = true;
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> &#x23F3; Preparando para descargar video... espere por favor.';
+                btn.style.background = '#374151';
+                btn.style.cursor = 'not-allowed';
+                btn.onclick = null;
             }
+            if (bar) {
+                bar.style.display = 'block';
+                const pb = document.getElementById('upload-progress-bar');
+                if (pb) pb.style.width = '0%';
+            }
+        };
 
-            // Pre-llenar con valores de las variables dinámicas actuales
-            const vars = window.VARIABLES_DINAMICAS || {};
-            const defaultNombre = vars['ARCHIVO'] || 'video';
-            const defaultRemate = vars['LOT_NUMERO'] || '';
-            const defaultLote   = vars['CATEGORIA_GANADO'] || '';
+        window._setDownloadBtnProgress = function(pct) {
+            const pb = document.getElementById('upload-progress-bar');
+            const label = document.getElementById('upload-progress-label');
+            if (pb) pb.style.width = pct + '%';
+            if (label) label.innerText = pct + '%';
+        };
 
-            const nombre = prompt("Nombre del video:", defaultNombre);
-            if (!nombre) return;
+        window._setDownloadBtnReady = function(blobUrl, filename) {
+            window._dlUploadState = 'done';
+            const btn = document.getElementById('render-video-download-btn');
+            const bar = document.getElementById('upload-progress-wrap');
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-download"></i> Descargar Video';
+                btn.style.background = '#22c55e';
+                btn.style.cursor = 'pointer';
+                btn.onclick = function() {
+                    const a = document.createElement('a');
+                    a.href = blobUrl;
+                    a.download = filename || 'video_renderizado.mp4';
+                    a.click();
+                };
+            }
+            if (bar) bar.style.display = 'none';
+        };
 
-            const remate = prompt("Remate / Evento:", defaultRemate);
-            if (remate === null) return;
+        window._setDownloadBtnError = function(blobUrl, filename) {
+            window._dlUploadState = 'error';
+            const btn = document.getElementById('render-video-download-btn');
+            const bar = document.getElementById('upload-progress-wrap');
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-download"></i> Descargar Video';
+                btn.style.background = '#22c55e';
+                btn.style.cursor = 'pointer';
+                // Al hacer click: reintenta subida; si sale bien, descarga
+                btn.onclick = async function() {
+                    await window.saveVideoToServerAuto(blobUrl);
+                    // saveVideoToServerAuto actualiza el estado del boton internamente
+                    // Si llega aqui y el estado es 'done', la descarga ya esta programada en el onclick
+                };
+            }
+            if (bar) bar.style.display = 'none';
+        };
 
-            const lote = prompt("Lote / Categoría:", defaultLote);
-            if (lote === null) return;
+        /**
+         * Auto-guardado al terminar el render. Usa XHR con barra de progreso.
+         */
+        window.saveVideoToServerAuto = async function(blobUrl) {
+            if (!blobUrl) return;
+            const vars       = window.VARIABLES_DINAMICAS || {};
+            const nombre     = vars['ARCHIVO']          || 'video';
+            const remate     = vars['LOT_NUMERO']       || 'sin_remate';
+            const lote       = vars['CATEGORIA_GANADO'] || 'sin_lote';
+            const templateId = window.ACTIVE_TEMPLATE_ID ? parseInt(window.ACTIVE_TEMPLATE_ID) : 0;
+            const filename   = nombre + '.mp4';
 
-            const statusEl = document.getElementById('save-server-status');
-            const saveBtn  = document.getElementById('render-video-save-server');
-
-            if (statusEl) { statusEl.style.display = 'block'; statusEl.style.background = '#1e293b'; statusEl.style.color = '#93c5fd'; statusEl.innerText = '⏳ Preparando y subiendo video...'; }
-            if (saveBtn) saveBtn.disabled = true;
+            window._setDownloadBtnUploading();
 
             try {
-                // 1. Obtener el Blob binario directamente desde la URL de memoria
-                const fetchResp = await fetch(blobUrl);
-                const videoBlob = await fetchResp.blob(); // Blob MP4 puro, sin conversión
+                const fetchResp    = await fetch(blobUrl);
+                const videoBlob    = await fetchResp.blob();
+                const evaluatedJson= window.generateJson ? window.generateJson() : null;
+                const dataJsonStr  = evaluatedJson ? JSON.stringify(evaluatedJson) : '';
 
-                // 2. JSON del canvas evaluado (valores reales, sin {{variables}})
-                const evaluatedJson = window.generateJson ? window.generateJson() : null;
-                const dataJsonStr   = evaluatedJson ? JSON.stringify(evaluatedJson) : '';
-
-                const templateId = window.ACTIVE_TEMPLATE_ID ? parseInt(window.ACTIVE_TEMPLATE_ID) : 0;
-
-                // 3. Construir FormData con binario
                 const formData = new FormData();
-                formData.append('video_file',  videoBlob, nombre + '.mp4'); // Blob como File binario
+                formData.append('video_file',  videoBlob, filename);
                 formData.append('nombre',      nombre);
                 formData.append('remate',      remate);
                 formData.append('lote',        lote);
                 formData.append('template_id', templateId);
                 formData.append('data_json',   dataJsonStr);
 
-                // 4. Subir vía fetchSeguro (detecta FormData automáticamente)
-                const res = await window.fetchSeguro('VideoController@saveAction', formData);
+                const res = await window.uploadVideoConProgreso(formData, window._setDownloadBtnProgress);
 
                 if (res && res.success) {
-                    if (statusEl) {
-                        statusEl.style.background = '#052e16';
-                        statusEl.style.color = '#86efac';
-                        statusEl.innerText = `✅ Guardado: ${res.nombre_archivo} (${res.tamano_kb} KB)`;
-                    }
-                    if (res.warning) console.warn("Video API:", res.warning);
-                } else if (res) {
-                    if (statusEl) { statusEl.style.background = '#2d1515'; statusEl.style.color = '#fca5a5'; statusEl.innerText = `❌ ${res.error}`; }
+                    console.log('Video API: Auto-guardado exitoso ->', res.nombre_archivo);
+                    window._setDownloadBtnReady(blobUrl, filename);
                 } else {
-                    if (statusEl) { statusEl.style.background = '#2d1515'; statusEl.style.color = '#fca5a5'; statusEl.innerText = '❌ Error de conexión.'; }
+                    console.warn('Video API: Auto-guardado con error ->', res ? res.error : 'sin respuesta');
+                    window._setDownloadBtnError(blobUrl, filename);
                 }
             } catch(e) {
-                console.error("saveVideoToServer:", e);
-                if (statusEl) { statusEl.style.background = '#2d1515'; statusEl.style.color = '#fca5a5'; statusEl.innerText = '❌ Error: ' + e.message; }
-            } finally {
-                if (saveBtn) saveBtn.disabled = false;
+                console.warn('Video API: Auto-guardado fallo ->', e.message);
+                window._setDownloadBtnError(blobUrl, filename);
             }
+        };
+
+        /**
+         * Reintento manual de subida (boton fallback Guardar en Servidor).
+         */
+        window.saveVideoToServer = async function() {
+            const blobUrl = window.AppState && window.AppState.lastRenderBlobUrl;
+            if (!blobUrl) { alert('No hay video disponible.'); return; }
+            await window.saveVideoToServerAuto(blobUrl);
         };
     </script>
 
@@ -1444,22 +1530,29 @@
             </div>
             <div id="render-video-wrap" style="display: none;">
                 <video id="render-video" controls style="width: 100%; max-height: 60vh; background: #000;"></video>
+
+                <!-- Barra de progreso de subida (visible mientras sube) -->
+                <div id="upload-progress-wrap" style="display:none; margin-top:14px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+                        <span style="font-size:0.78rem; color:#93c5fd;">Preparando archivo para descarga...</span>
+                        <span id="upload-progress-label" style="font-size:0.78rem; color:#93c5fd; font-weight:bold;">0%</span>
+                    </div>
+                    <div style="width:100%; background:#1e293b; border-radius:6px; overflow:hidden; height:8px;">
+                        <div id="upload-progress-bar" style="width:0%; height:8px; background:linear-gradient(90deg,#4f46e5,#818cf8); transition:width 0.25s ease;"></div>
+                    </div>
+                </div>
+
                 <div style="margin-top: 15px; display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap;">
                     <a id="render-video-link" href="#" target="_blank"
                         style="color: #9cf; text-decoration: underline; font-size: 0.9rem;">Ver en pantalla completa</a>
-                    <div style="display: flex; gap: 10px;">
-                        <a id="render-video-download" href="#" download="video_renderizado.mp4" class="btn"
-                            style="background: #22c55e;">
-                            <i class="fas fa-download"></i> Descargar Video
-                        </a>
-                        <button id="render-video-save-server" class="btn"
-                            style="background: #4f46e5; cursor: pointer; border: none;"
-                            onclick="window.saveVideoToServer()">
-                            <i class="fas fa-cloud-upload-alt"></i> Guardar en Servidor
+                    <div style="display: flex; gap: 10px; align-items:center;">
+                        <!-- Unico boton: deshabilitado mientras sube, reintenta subida si hubo error -->
+                        <button id="render-video-download-btn" class="btn" disabled
+                            style="background:#374151; cursor:not-allowed; border:none; opacity:0.85;">
+                            <i class="fas fa-spinner fa-spin"></i> &#x23F3; Preparando para descargar video... espere por favor.
                         </button>
                     </div>
                 </div>
-                <div id="save-server-status" style="display:none; margin-top: 10px; font-size: 0.85rem; padding: 8px 12px; border-radius: 6px;"></div>
             </div>
             <pre id="render-error"
                 style="display: none; background: #111; color: #f88; border: 1px solid #333; padding: 15px; border-radius: 6px; max-height: 60vh; overflow: auto;"></pre>
