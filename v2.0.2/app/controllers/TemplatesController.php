@@ -2,14 +2,30 @@
 
 namespace Controllers;
 
+/**
+ * TemplatesController
+ * Gestiona el CRUD de plantillas de video.
+ * Las acciones son invocadas vía AjaxGatewayController con ofuscación.
+ */
 class TemplatesController extends Controller {
 
-    public function defaultAction(){
-        
+    /**
+     * Constructor: Centraliza la seguridad para todas las acciones de este controlador.
+     */
+    public function __construct() {
+        parent::__construct();
+        // Guardia global: si falla, detiene la ejecución antes de llegar a cualquier método.
+        $this->validarAcceso();
     }
 
-    private function saveAction() {
-        $this->validarAcceso();
+    public function defaultAction() {
+        // No hace nada por ahora
+    }
+
+    /**
+     * Guarda un nuevo diseño. Invocado como 'Templates@save'
+     */
+    protected function saveAction() {
         $data = json_decode(file_get_contents('php://input'), true);
 
         if (!$data || empty($data['nombre'])) {
@@ -29,8 +45,10 @@ class TemplatesController extends Controller {
         }
     }
 
-    private function updateAction() {
-        $this->validarAcceso();
+    /**
+     * Actualiza un diseño existente. Invocado como 'Templates@update'
+     */
+    protected function updateAction() {
         $data = json_decode(file_get_contents('php://input'), true);
 
         if (!$data || empty($data['id'])) {
@@ -48,45 +66,43 @@ class TemplatesController extends Controller {
         }
     }
 
-    private function duplicateAction() {
-        $this->validarAcceso();
+    /**
+     * Duplica una plantilla. Invocado como 'Templates@duplicate'
+     */
+    protected function duplicateAction() {
         $data = json_decode(file_get_contents('php://input'), true);
+        $id = (int)($data['id'] ?? 0);
 
-        if (!$data || empty($data['id'])) {
-            return $this->jsonResponse(['success' => false, 'error' => 'ID no proporcionado']);
-        }
+        if (!$id) return $this->jsonResponse(['success' => false, 'error' => 'ID inválido']);
 
         try {
-            $original = $this->base->fetchAssociative("SELECT * FROM video_templates WHERE id = ?", [$data['id']]);
-            if ($original) {
-                $this->base->executeStatement(
-                    "INSERT INTO video_templates (idClientes, nombre, data_json, thumbnail_base64) VALUES (?, ?, ?, ?)",
-                    [$original['idCliente'], $original['nombre'] . ' (Copia)', $original['data_json'], $original['thumbnail_base64']]
-                );
-                return $this->jsonResponse(['success' => true]);
-            }
-        } catch (\Exception $e) {
-            return $this->jsonResponse(['success' => false, 'error' => $e->getMessage()]);
-        }
-    }
+            $template = $this->base->fetchRow("SELECT * FROM video_templates WHERE id = ?", [$id]);
+            if (!$template) throw new \Exception("Plantilla no encontrada");
 
-    private function deleteAction() {
-        $this->validarAcceso();
-        $data = json_decode(file_get_contents('php://input'), true);
-
-        if (!$data || empty($data['id'])) {
-            return $this->jsonResponse(['success' => false, 'error' => 'ID no proporcionado']);
-        }
-
-        try {
-            $this->base->executeStatement("UPDATE video_templates SET activo = 0 WHERE id = ?", [$data['id']]);
+            $this->base->executeStatement(
+                "INSERT INTO video_templates (idClientes, nombre, data_json, thumbnail_base64) VALUES (?, ?, ?, ?)",
+                [$template['idClientes'], $template['nombre'] . ' (Copia)', $template['data_json'], $template['thumbnail_base64']]
+            );
             return $this->jsonResponse(['success' => true]);
         } catch (\Exception $e) {
             return $this->jsonResponse(['success' => false, 'error' => $e->getMessage()]);
         }
     }
 
-    private function jsonResponse($data) {
-        return $data;
+    /**
+     * Borrado lógico. Invocado como 'Templates@delete'
+     */
+    protected function deleteAction() {
+        $data = json_decode(file_get_contents('php://input'), true);
+        $id = (int)($data['id'] ?? 0);
+
+        if (!$id) return $this->jsonResponse(['success' => false, 'error' => 'ID inválido']);
+
+        try {
+            $this->base->executeStatement("UPDATE video_templates SET activo = 0 WHERE id = ?", [$id]);
+            return $this->jsonResponse(['success' => true]);
+        } catch (\Exception $e) {
+            return $this->jsonResponse(['success' => false, 'error' => $e->getMessage()]);
+        }
     }
 }

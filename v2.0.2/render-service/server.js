@@ -8,7 +8,6 @@ const path = require('path');
 const app = express();
 app.use(express.json({ limit: '50mb' }));
 
-// Cabeceras CORS para evitar cualquier bloqueo del navegador
 app.use((req, res, next) => {
     res.header("Access-Control-Allow-Origin", "*");
     res.header("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
@@ -16,36 +15,57 @@ app.use((req, res, next) => {
     next();
 });
 
-// Servimos las carpetas para que Chromium las vea vía HTTP (evita bloqueos file://)
 app.use('/static', express.static(path.join(__dirname, 'render-static')));
 app.use('/temp', express.static(path.join(__dirname, 'temp')));
 app.use('/assets', express.static(path.join(__dirname, 'render-static/assets')));
 
 const queue = async.queue(async (task) => {
-    console.log(`[Queue] Iniciando tarea para Render ID: ${task.renderId}`);
+    const { renderId } = task;
+    console.log(`[Queue] Iniciando tarea para Render ID: ${renderId}`);
+
+    let connection;
     try {
-        await renderer.process(task.renderId);
-        console.log(`[Queue] Tarea finalizada con éxito: ${task.renderId}`);
+        connection = await mysql.createConnection(config.db);
+
+        // 1. Marcar como PROCESANDO
+        await connection.execute(
+            'UPDATE video_renders SET estado = "procesando", error_msg = NULL WHERE id = ?',
+            [renderId]
+        );
+
+        // 2. Ejecutar Renderizado
+        const result = await renderer.process(renderId);
+
+        // 3. Marcar como COMPLETADO
+        await connection.execute(
+            'UPDATE video_renders SET estado = "completado", nombre_archivo = ?, tamano_kb = ?, fecha_creacion = NOW() WHERE id = ?',
+            [result.fileName, result.fileSizeKb, renderId]
+        );
+
+        console.log(`[Queue] Tarea finalizada con éxito: ${renderId}`);
+
     } catch (err) {
-        console.error(`[Queue] Error procesando tarea ${task.renderId}:`, err);
+        console.error(`[Queue] Error procesando tarea ${renderId}:`, err);
         try {
-            const connection = await mysql.createConnection(config.db);
+            if (!connection) connection = await mysql.createConnection(config.db);
             await connection.execute(
                 'UPDATE video_renders SET estado = "error", error_msg = ? WHERE id = ?',
-                [err.message, task.renderId]
+                [err.message, renderId]
             );
-            await connection.end();
         } catch (dbErr) {
-            console.error('[Queue] No se pudo actualizar estado de error en BD:', dbErr);
+            console.error('[Queue] Error crítico actualizando estado de error en BD:', dbErr);
         }
+    } finally {
+        if (connection) await connection.end();
     }
 }, config.concurrency);
 
 app.post('/render', (req, res) => {
     const { renderId } = req.body;
     if (!renderId) return res.status(400).json({ error: 'renderId es requerido' });
+
     queue.push({ renderId });
-    res.json({ success: true, message: 'Tarea encolada' });
+    res.json({ success: true, message: 'Tarea encolada correctamente' });
 });
 
 app.get('/status', (req, res) => {
@@ -54,6 +74,8 @@ app.get('/status', (req, res) => {
 
 app.listen(config.port, () => {
     console.log(`=========================================`);
-    console.log(`Video Render Service (V2.0.2) en puerto ${config.port}`);
+    console.log(`Video Render Service (V2.0.2) - Integrated`);
+    console.log(`Puerto: ${config.port}`);
+    console.log(`Base de Datos: ${config.db.database}`);
     console.log(`=========================================`);
 });

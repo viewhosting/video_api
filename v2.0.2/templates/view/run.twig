@@ -173,7 +173,7 @@
             const thumb = window.AppState.canvas.toDataURL({ format: 'jpeg', quality: 0.5 });
 
             try {
-                const res = await window.fetchSeguro('TemplatesController@saveAction', {
+                const res = await window.fetchSeguro('Templates@save', {
                     nombre: nombre,
                     data_json: JSON.stringify(json),
                     thumbnail: thumb
@@ -203,7 +203,7 @@
             const thumb = window.AppState.canvas.toDataURL({ format: 'jpeg', quality: 0.5 });
 
             try {
-                const res = await window.fetchSeguro('TemplatesController@updateAction', {
+                const res = await window.fetchSeguro('Templates@update', {
                     id: window.ACTIVE_TEMPLATE_ID,
                     data_json: JSON.stringify(json),
                     thumbnail: thumb
@@ -223,7 +223,7 @@
          */
         window.duplicateTemplate = async function(id) {
             try {
-                const res = await window.fetchSeguro('TemplatesController@duplicateAction', { id: id });
+                const res = await window.fetchSeguro('Templates@duplicate', { id: id });
                 if (res && res.success) {
                     location.reload();
                 } else if (res) {
@@ -238,7 +238,7 @@
         window.testPlanB = async function() {
             try {
                 console.log("Probando Plan B (Node.js) para ID 9...");
-                const res = await window.fetchSeguro('VideoController@testPlanBAction', {});
+                const res = await window.fetchSeguro('Video@testPlanB', {});
                 console.log("Respuesta de la prueba:", res);
                 if (res && res.success) {
                     alert("¡Éxito! Tarea enviada a Node.js. Revisa la terminal del servidor Node.");
@@ -259,7 +259,7 @@
             if (!confirm("¿Realmente deseas ELIMINAR esta plantilla de forma permanente?")) return;
 
             try {
-                const res = await window.fetchSeguro('TemplatesController@deleteAction', { id: window.ACTIVE_TEMPLATE_ID });
+                const res = await window.fetchSeguro('Templates@delete', { id: window.ACTIVE_TEMPLATE_ID });
                 if (res && res.success) {
                     alert("Eliminada correctamente.");
                     location.reload();
@@ -280,7 +280,7 @@
                     xhr.open('POST', 'ajaxGateway', true);
                     xhr.setRequestHeader('X-Authorization-Key', window.AUTH_KEY);
                     xhr.setRequestHeader('X-Nonce', window.AJAX_NONCE);
-                    xhr.setRequestHeader('X-Action', 'VideoController@saveAction');
+                    xhr.setRequestHeader('X-Action', 'Video@save');
                     // No ponemos Content-Type: el navegador agrega el boundary del multipart
 
                     xhr.upload.onprogress = function(e) {

@@ -122,6 +122,13 @@
             });
         };
 
+        // Diagnóstico de 404 total (Imágenes, scripts, etc.)
+        window.addEventListener('error', (e) => {
+            const target = e.target || e.srcElement;
+            const url = target.src || target.href;
+            if (url) console.error(`[404 Diagnostic] No se pudo cargar: ${url}`);
+        }, true);
+
         window.getCalculatedDuration = () => {
             const canvas = window.AppState.canvas;
             let maxTime = 2;
