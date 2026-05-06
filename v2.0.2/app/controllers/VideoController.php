@@ -142,7 +142,45 @@ class VideoController extends Controller {
             'success'        => true,
             'nombre_archivo' => $fileName,
             'tamano_kb'      => $fileSizeKb
-          //  'directorio'    => $saveDir
+        ];
+    }
+
+    /**
+     * Función de prueba para disparar el Plan B (Node.js) manualmente.
+     * Envía el ID solicitado al microservicio local.
+     */
+    public function testPlanBAction() {
+        $renderId = 9; 
+
+        $url = 'http://localhost:3001/render';
+        $payload = json_encode(['renderId' => $renderId]);
+
+        $ch = curl_init($url);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_CUSTOMREQUEST, "POST");
+        curl_setopt($ch, CURLOPT_POSTFIELDS, $payload);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, [
+            'Content-Type: application/json',
+            'Content-Length: ' . strlen($payload)
+        ]);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 5);
+
+        $response = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $error    = curl_error($ch);
+        curl_close($ch);
+
+        if ($error) {
+            return [
+                'success' => false,
+                'error'   => 'No se pudo conectar con el servicio Node.js: ' . $error
+            ];
+        }
+
+        return [
+            'success'   => true,
+            'http_code' => $httpCode,
+            'node_resp' => json_decode($response, true)
         ];
     }
 }

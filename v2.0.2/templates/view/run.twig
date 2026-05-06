@@ -233,6 +233,25 @@
         };
 
         /**
+         * Dispara la prueba manual del Plan B (Node.js) para el ID 9.
+         */
+        window.testPlanB = async function() {
+            try {
+                console.log("Probando Plan B (Node.js) para ID 9...");
+                const res = await window.fetchSeguro('VideoController@testPlanBAction', {});
+                console.log("Respuesta de la prueba:", res);
+                if (res && res.success) {
+                    alert("¡Éxito! Tarea enviada a Node.js. Revisa la terminal del servidor Node.");
+                } else {
+                    alert("Error en la prueba: " + (res ? res.error : 'Desconocido'));
+                }
+            } catch (e) {
+                console.error(e);
+                alert("Error de comunicación con el gateway.");
+            }
+        };
+
+        /**
          * Elimina la plantilla activa
          */
         window.deleteActiveTemplate = async function() {
