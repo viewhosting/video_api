@@ -1,0 +1,1627 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Video Template Editor</title>
+    <!-- Fabric.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.1/fabric.min.js"></script>
+    <!-- Google Fonts UI -->
+    <!-- Local Fonts -->
+    <link rel="stylesheet" href="{{ css_fonts }}">
+    <!-- FontAwesome for UI Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Pickr (Advanced Color Picker) -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@simonwep/pickr/dist/themes/nano.min.css"/>
+    <script src="https://cdn.jsdelivr.net/npm/@simonwep/pickr/dist/pickr.min.js"></script>
+
+
+    <!-- FFmpeg.wasm v0.12.x (Cargado localmente para evitar errores de Worker/CORS) -->
+    <script src="{{ js_ffmpeg }}"></script>
+    <script src="{{ js_util }}"></script>
+    <script>
+        window.FFMPEG_CORE_URL = "{{ js_ffmpeg_core }}";
+        window.FFMPEG_WASM_URL = "{{ wasm_ffmpeg_core }}";
+        window.FFMPEG_WORKER_URL = "{{ worker_ffmpeg_core }}";
+    </script>
+    <script type="module" src="{{ url_js_protegido }}"></script>
+    
+    <script>
+        window.ACTIVE_TEMPLATE_ID = null;
+        window.AJAX_NONCE = "{{ encrypted_nonce }}";
+        window.AUTH_KEY = "{{ authorization_key }}";
+        window.VARIABLES_DINAMICAS = {{ variables.dinamicas | json_encode | raw }};
+
+        // Comunicar al padre el nuevo token para re-aperturas exitosas
+        if (window.opener) {
+            window.opener.postMessage({
+                function: "AccesoVideoOK", 
+                nuevo_token: "{{ reopen_token }}"
+            }, "*");
+        }
+
+        /**
+         * Cola serial de peticiones: garantiza que solo una peticion segura
+         * este en vuelo a la vez, evitando race conditions en el nonce rotativo.
+         */
+        window._fetchSeguroQueue = Promise.resolve();
+
+        /**
+         * Fetch wrapper seguro con inyeccion de headers (Nonce, Auth y Accion).
+         * Serializa automaticamente todas las llamadas para que el nonce
+         * siempre este actualizado antes de cada peticion.
+         */
+        window.fetchSeguro = function(actionName, payload = {}) {
+            const task = window._fetchSeguroQueue.then(async () => {
+                try {
+                    const isBinary = payload instanceof FormData;
+
+                    const requestInit = {
+                        method: 'POST',
+                        headers: {
+                            'X-Authorization-Key': window.AUTH_KEY,
+                            'X-Nonce': window.AJAX_NONCE,
+                            'X-Action': actionName
+                        },
+                        body: isBinary ? payload : JSON.stringify(payload)
+                    };
+
+                    if (!isBinary) {
+                        requestInit.headers['Content-Type'] = 'application/json';
+                    }
+
+                    const response = await fetch('ajaxGateway', requestInit);
+
+                    if (!response.ok) {
+                        throw new Error("HTTP " + response.status);
+                    }
+
+                    const json = await response.json();
+
+                    if (json.error === 'SECURITY_VIOLATION') {
+                        alert("Anomalia de seguridad o sesion caducada.");
+                        window.close();
+                        return null;
+                    }
+
+                    // Actualizar el nonce ANTES de liberar la cola
+                    if (json.__new_nonce) {
+                        window.AJAX_NONCE = json.__new_nonce;
+                    }
+
+                    return json;
+                } catch (e) {
+                    console.error("Error en fetchSeguro:", e);
+                    alert("Error de conexion seguro.");
+                    return null;
+                }
+            });
+
+            // La cola avanza aunque la tarea falle (no se bloquea para siempre)
+            window._fetchSeguroQueue = task.catch(() => {});
+            return task;
+        };
+        
+        window.evaluateVariables = function(text) {
+            if (!text || typeof text !== 'string') return text;
+            let result = text;
+            if (window.VARIABLES_DINAMICAS) {
+                for (const [key, val] of Object.entries(window.VARIABLES_DINAMICAS)) {
+                    const regex = new RegExp('\\{\\{' + key + '\\}\\}', 'g');
+                    result = result.replace(regex, val);
+                }
+            }
+            return result;
+        };
+
+        console.log(window.SAVED_TEMPLATES);
+        /**
+         * Controla la apertura del slidebar lateral del modal
+         */
+        window.toggleJsonSlidebar = function(show) {
+            const sb = document.getElementById('json-modal-slidebar');
+            const overlay = document.getElementById('modal-sidebar-overlay');
+            if (show) {
+                sb.classList.add('open');
+                overlay.classList.add('open');
+            } else {
+                sb.classList.remove('open');
+                overlay.classList.remove('open');
+            }
+        };
+
+        /**
+         * Carga un template guardado en el editor
+         */
+        window.loadTemplateById = function(id) {
+            if (!window.SAVED_TEMPLATES || !window.SAVED_TEMPLATES[id]) {
+                alert("Error: No se encontró la data del template.");
+                return;
+            }
+
+            const templateEntry = window.SAVED_TEMPLATES[id];
+            const templateData = templateEntry.data;
+            
+            if (window.importJson) {
+                if (confirm(`¿Deseas cargar la plantilla "${templateEntry.nombre}"?`)) {
+                    window.importJson(templateData);
+                    window.ACTIVE_TEMPLATE_ID = id;
+                    
+                    // Actualizamos el textarea por si abre el slidebar
+                    document.getElementById('json-textarea').value = JSON.stringify(templateData, null, 4);
+                    
+                    // Mostramos acciones de edición en el slidebar
+                    document.getElementById('template-active-actions').style.display = 'flex';
+                    
+                    closeJsonModal();
+                }
+            }
+        };
+
+        /**
+         * Guarda el diseño actual como una NUEVA plantilla
+         */
+        window.saveCurrentAsNew = async function() {
+            const nombre = prompt("Ingresa un nombre para la nueva plantilla:");
+            if (!nombre) return;
+
+            const json = window.generateJson ? window.generateJson() : null;
+            if (!json) return;
+
+            // Capturar miniatura del canvas (Base64)
+            const thumb = window.AppState.canvas.toDataURL({ format: 'jpeg', quality: 0.5 });
+
+            try {
+                const res = await window.fetchSeguro('Templates@save', {
+                    nombre: nombre,
+                    data_json: JSON.stringify(json),
+                    thumbnail: thumb
+                });
+
+                if (res && res.success) {
+                    alert("Plantilla guardada con éxito.");
+                    location.reload(); // Recargamos para ver la nueva en la lista
+                } else if (res) {
+                    alert("Error al guardar: " + res.error);
+                }
+            } catch (e) {
+                console.error(e);
+                alert("Error de conexión al guardar.");
+            }
+        };
+
+        /**
+         * Actualiza la plantilla activa con los cambios actuales
+         */
+        window.saveCurrentChanges = async function() {
+            if (!window.ACTIVE_TEMPLATE_ID) return;
+
+            if (!confirm("¿Estás seguro de que deseas SOBREESCRIBIR esta plantilla con los cambios actuales?")) return;
+
+            const json = window.generateJson ? window.generateJson() : null;
+            const thumb = window.AppState.canvas.toDataURL({ format: 'jpeg', quality: 0.5 });
+
+            try {
+                const res = await window.fetchSeguro('Templates@update', {
+                    id: window.ACTIVE_TEMPLATE_ID,
+                    data_json: JSON.stringify(json),
+                    thumbnail: thumb
+                });
+
+                if (res && res.success) {
+                    alert("Cambios guardados correctamente.");
+                    location.reload();
+                } else if (res) {
+                    alert("Error al actualizar: " + res.error);
+                }
+            } catch (e) { alert("Error al actualizar."); }
+        };
+
+        /**
+         * Duplica una plantilla existente
+         */
+        window.duplicateTemplate = async function(id) {
+            try {
+                const res = await window.fetchSeguro('Templates@duplicate', { id: id });
+                if (res && res.success) {
+                    location.reload();
+                } else if (res) {
+                    alert("Error al duplicar: " + res.error);
+                }
+            } catch (e) { alert("Error al duplicar."); }
+        };
+
+        /**
+         * Dispara la prueba manual del Plan B (Node.js) para el ID 9.
+         */
+        window.testPlanB = async function() {
+            try {
+                console.log("Probando Plan B (Node.js) para ID 9...");
+                const res = await window.fetchSeguro('Video@testPlanB', {});
+                console.log("Respuesta de la prueba:", res);
+                if (res && res.success) {
+                    alert("¡Éxito! Tarea enviada a Node.js. Revisa la terminal del servidor Node.");
+                } else {
+                    alert("Error en la prueba: " + (res ? res.error : 'Desconocido'));
+                }
+            } catch (e) {
+                console.error(e);
+                alert("Error de comunicación con el gateway.");
+            }
+        };
+
+        /**
+         * Elimina la plantilla activa
+         */
+        window.deleteActiveTemplate = async function() {
+            if (!window.ACTIVE_TEMPLATE_ID) return;
+            if (!confirm("¿Realmente deseas ELIMINAR esta plantilla de forma permanente?")) return;
+
+            try {
+                const res = await window.fetchSeguro('Templates@delete', { id: window.ACTIVE_TEMPLATE_ID });
+                if (res && res.success) {
+                    alert("Eliminada correctamente.");
+                    location.reload();
+                } else if (res) {
+                    alert("Error al eliminar: " + res.error);
+                }
+            } catch (e) { alert("Error al eliminar."); }
+        };
+
+        /**
+         * Sube el video al servidor via XHR para obtener progreso real de subida.
+         * Respeta el nonce queue igual que fetchSeguro.
+         */
+        window.uploadVideoConProgreso = function(formData, onProgress) {
+            const task = window._fetchSeguroQueue.then(() => {
+                return new Promise((resolve, reject) => {
+                    const xhr = new XMLHttpRequest();
+                    xhr.open('POST', 'ajaxGateway', true);
+                    xhr.setRequestHeader('X-Authorization-Key', window.AUTH_KEY);
+                    xhr.setRequestHeader('X-Nonce', window.AJAX_NONCE);
+                    xhr.setRequestHeader('X-Action', 'Video@save');
+                    // No ponemos Content-Type: el navegador agrega el boundary del multipart
+
+                    xhr.upload.onprogress = function(e) {
+                        if (e.lengthComputable && onProgress) {
+                            onProgress(Math.round((e.loaded / e.total) * 100));
+                        }
+                    };
+
+                    xhr.onload = function() {
+                        try {
+                            const json = JSON.parse(xhr.responseText);
+                            if (json.__new_nonce) window.AJAX_NONCE = json.__new_nonce;
+                            resolve(json);
+                        } catch(e) { reject(new Error('Respuesta invalida del servidor')); }
+                    };
+
+                    xhr.onerror = function() { reject(new Error('Error de red al subir')); };
+                    xhr.send(formData);
+                });
+            });
+
+            window._fetchSeguroQueue = task.catch(() => {});
+            return task;
+        };
+
+        /**
+         * Helpers de UI para el boton de descarga
+         */
+        window._dlUploadState = 'idle'; // 'idle' | 'uploading' | 'done' | 'error'
+
+        window._setDownloadBtnUploading = function() {
+            window._dlUploadState = 'uploading';
+            const btn = document.getElementById('render-video-download-btn');
+            const bar = document.getElementById('upload-progress-wrap');
+            if (btn) {
+                btn.disabled = true;
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> &#x23F3; Preparando para descargar video... espere por favor.';
+                btn.style.background = '#374151';
+                btn.style.cursor = 'not-allowed';
+                btn.onclick = null;
+            }
+            if (bar) {
+                bar.style.display = 'block';
+                const pb = document.getElementById('upload-progress-bar');
+                if (pb) pb.style.width = '0%';
+            }
+        };
+
+        window._setDownloadBtnProgress = function(pct) {
+            const pb = document.getElementById('upload-progress-bar');
+            const label = document.getElementById('upload-progress-label');
+            if (pb) pb.style.width = pct + '%';
+            if (label) label.innerText = pct + '%';
+        };
+
+        window._setDownloadBtnReady = function(blobUrl, filename) {
+            window._dlUploadState = 'done';
+            const btn = document.getElementById('render-video-download-btn');
+            const bar = document.getElementById('upload-progress-wrap');
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-download"></i> Descargar Video';
+                btn.style.background = '#22c55e';
+                btn.style.cursor = 'pointer';
+                btn.onclick = function() {
+                    const a = document.createElement('a');
+                    a.href = blobUrl;
+                    a.download = filename || 'video_renderizado.mp4';
+                    a.click();
+                };
+            }
+            if (bar) bar.style.display = 'none';
+        };
+
+        window._setDownloadBtnError = function(blobUrl, filename) {
+            window._dlUploadState = 'error';
+            const btn = document.getElementById('render-video-download-btn');
+            const bar = document.getElementById('upload-progress-wrap');
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-download"></i> Descargar Video';
+                btn.style.background = '#22c55e';
+                btn.style.cursor = 'pointer';
+                // Al hacer click: reintenta subida; si sale bien, descarga
+                btn.onclick = async function() {
+                    await window.saveVideoToServerAuto(blobUrl);
+                    // saveVideoToServerAuto actualiza el estado del boton internamente
+                    // Si llega aqui y el estado es 'done', la descarga ya esta programada en el onclick
+                };
+            }
+            if (bar) bar.style.display = 'none';
+        };
+
+        /**
+         * Auto-guardado al terminar el render. Usa XHR con barra de progreso.
+         */
+        window.saveVideoToServerAuto = async function(blobUrl) {
+            if (!blobUrl) return;
+            const vars       = window.VARIABLES_DINAMICAS || {};
+            const nombre     = vars['ARCHIVO']          || 'video';
+            const remate     = vars['LOT_NUMERO']       || 'sin_remate';
+            const lote       = vars['CATEGORIA_GANADO'] || 'sin_lote';
+            const templateId = window.ACTIVE_TEMPLATE_ID ? parseInt(window.ACTIVE_TEMPLATE_ID) : 0;
+            const filename   = nombre + '.mp4';
+
+            window._setDownloadBtnUploading();
+
+            try {
+                const fetchResp    = await fetch(blobUrl);
+                const videoBlob    = await fetchResp.blob();
+                const evaluatedJson= window.generateJson ? window.generateJson() : null;
+                const dataJsonStr  = evaluatedJson ? JSON.stringify(evaluatedJson) : '';
+
+                const formData = new FormData();
+                formData.append('video_file',  videoBlob, filename);
+                formData.append('nombre',      nombre);
+                formData.append('remate',      remate);
+                formData.append('lote',        lote);
+                formData.append('template_id', templateId);
+                formData.append('data_json',   dataJsonStr);
+
+                const res = await window.uploadVideoConProgreso(formData, window._setDownloadBtnProgress);
+
+                if (res && res.success) {
+                    console.log('Video API: Auto-guardado exitoso ->', res.nombre_archivo);
+                    window._setDownloadBtnReady(blobUrl, filename);
+                } else {
+                    console.warn('Video API: Auto-guardado con error ->', res ? res.error : 'sin respuesta');
+                    window._setDownloadBtnError(blobUrl, filename);
+                }
+            } catch(e) {
+                console.warn('Video API: Auto-guardado fallo ->', e.message);
+                window._setDownloadBtnError(blobUrl, filename);
+            }
+        };
+
+        /**
+         * Reintento manual de subida (boton fallback Guardar en Servidor).
+         */
+        window.saveVideoToServer = async function() {
+            const blobUrl = window.AppState && window.AppState.lastRenderBlobUrl;
+            if (!blobUrl) { alert('No hay video disponible.'); return; }
+            await window.saveVideoToServerAuto(blobUrl);
+        };
+    </script>
+
+    <style>
+        :root {
+            --bg-dark: #0c0d10;
+            --bg-panel: #15171c;
+            --bg-input: #15171c;
+            --text-main: #e2e8f0;
+            --text-highlight: #ffffff;
+            --accent: #4f46e5;
+            --accent-hover: #6366f1;
+            --border: #262a33;
+            --danger: #ef4444;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            background-color: var(--bg-dark);
+            color: var(--text-main);
+            overflow: hidden;
+        }
+
+        .panel-bg {
+            background-color: var(--bg-panel);
+        }
+
+        .border-base {
+            border-color: var(--border);
+        }
+
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 4px;
+            height: 4px;
+        }
+
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: #15171c;
+        }
+
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #333741;
+            border-radius: 10px;
+        }
+
+        #layout-row {
+            flex: 1;
+            display: flex;
+            min-height: 0;
+        }
+
+        #top-header {
+            height: 48px;
+            background-color: var(--bg-panel);
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 16px;
+            z-index: 20;
+        }
+
+        #top-header-left {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        #top-header-title {
+            font-size: 0.8rem;
+            font-weight: 700;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            color: var(--text-highlight);
+        }
+
+        #top-header-subtitle {
+            font-size: 0.7rem;
+            color: #888;
+        }
+
+        #top-header-right {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 0.75rem;
+            color: #999;
+        }
+
+        /* --- LAYOUT --- */
+        #sidebar {
+            display: none;
+        }
+
+        #main {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background-color: #111;
+            /* Darker for canvas contrast */
+            position: relative;
+        }
+
+        #properties {
+            width: 320px;
+            background-color: var(--bg-panel);
+            border-left: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+            overflow-x: hidden;
+            z-index: 10;
+            box-shadow: -10px 0 30px rgba(0, 0, 0, 0.35);
+        }
+
+        #props-container {
+            margin-top: auto;
+            padding: 10px 12px 12px 12px;
+            border-top: 1px solid var(--border);
+            background-color: var(--bg-panel);
+        }
+
+        /* --- COMPONENTS --- */
+
+        /* Headers */
+        .panel-header {
+            padding: 15px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--text-highlight);
+            border-bottom: 1px solid var(--border);
+            background-color: var(--bg-dark);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        /* Tools / Buttons */
+        .tool-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+            padding: 10px;
+        }
+
+        .tool-btn {
+            background: var(--bg-input);
+            border: 1px solid var(--border);
+            color: var(--text-main);
+            padding: 12px;
+            cursor: pointer;
+            border-radius: 4px;
+            font-size: 0.8rem;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+        }
+
+        .tool-btn i {
+            font-size: 1.2rem;
+            margin-bottom: 5px;
+            color: var(--accent);
+        }
+
+        .tool-btn:hover {
+            background-color: #444;
+            color: var(--text-highlight);
+            border-color: #555;
+        }
+
+        .tool-btn.active {
+            background-color: #4f46e5;
+            color: #ffffff;
+            border-color: #4f46e5;
+        }
+
+        .tool-btn.full-width {
+            grid-column: span 2;
+            flex-direction: row;
+        }
+
+        .tool-btn.full-width i {
+            margin-bottom: 0;
+            margin-right: 10px;
+        }
+
+        /* Properties panel */
+        #props-container {
+            padding: 12px 14px 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            overflow-y: auto;
+            max-height: calc(100vh - 120px);
+        }
+
+        .prop-card {
+            background: rgba(15, 23, 42, 0.85);
+            border-radius: 10px;
+            border: 1px solid #262a33;
+            box-shadow: 0 18px 40px rgba(0, 0, 0, 0.6);
+            padding: 10px 12px 12px;
+        }
+
+        .prop-card-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-size: 0.6rem;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            color: #94a3b8;
+            margin-bottom: 8px;
+        }
+
+        .prop-card-body {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        /* Layers List */
+        #layers-list {
+            flex: 1;
+            overflow-y: auto;
+            padding: 10px;
+        }
+
+        .layer-group {
+            margin-bottom: 8px;
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            background-color: var(--bg-dark);
+            overflow: hidden;
+        }
+
+        .layer-group-header {
+            padding: 8px 12px;
+            background-color: #2d2d2d;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-weight: 600;
+            font-size: 0.85rem;
+        }
+
+        .layer-group-header:hover {
+            background-color: #333;
+        }
+
+        .layer-group-header.active {
+            color: var(--accent);
+            border-left: 3px solid var(--accent);
+        }
+
+        .layer-item {
+            padding: 8px 12px 8px 25px;
+            cursor: pointer;
+            font-size: 0.8rem;
+            display: flex;
+            align-items: center;
+            border-top: 1px solid var(--border);
+            color: #aaa;
+        }
+
+        .layer-item:hover {
+            background-color: #333;
+            color: #fff;
+        }
+
+        .layer-item.active {
+            background-color: rgba(0, 122, 204, 0.2);
+            color: var(--accent);
+        }
+
+        .layer-item i {
+            width: 20px;
+            text-align: center;
+            margin-right: 8px;
+            font-size: 0.9rem;
+        }
+
+        /* Toolbar (Top) */
+        #toolbar {
+            height: 50px;
+            background-color: var(--bg-panel);
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            padding: 0 15px;
+            gap: 15px;
+        }
+
+        .toolbar-input-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background-color: var(--bg-dark);
+            padding: 4px 10px;
+            border-radius: 4px;
+            border: 1px solid var(--border);
+        }
+
+        .toolbar-input-group input {
+            background: transparent;
+            border: none;
+            color: var(--text-highlight);
+            outline: none;
+            width: 200px;
+            font-size: 0.9rem;
+        }
+
+        .btn {
+            padding: 8px 16px;
+            background-color: var(--accent);
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            font-weight: 500;
+            transition: background 0.2s;
+        }
+
+        .btn:hover {
+            background-color: var(--accent-hover);
+        }
+
+        .btn-secondary {
+            background-color: #444;
+        }
+
+        .btn-secondary:hover {
+            background-color: #555;
+        }
+
+        .btn-danger {
+            background-color: var(--danger);
+        }
+
+        .btn-danger:hover {
+            background-color: #c9302c;
+        }
+
+        /* Canvas Area */
+        #canvas-container {
+            flex: 1;
+            overflow: auto;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 40px;
+            background-image: radial-gradient(#262a33 1px, transparent 1px);
+            background-size: 32px 32px;
+            background-color: #0c0d10;
+        }
+
+        .canvas-wrapper {
+            position: relative;
+            display: inline-block;
+            box-shadow: 0 0 50px rgba(0, 0, 0, 0.7);
+            border: 1px solid #333;
+            background: #000;
+        }
+
+        #timeline {
+            height: auto;
+            background-color: var(--bg-panel);
+            border-top: 1px solid var(--border);
+            padding: 6px 12px 10px 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        #timeline-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-size: 0.75rem;
+            color: #888;
+        }
+
+        #timeline-header span {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        #timeline-track-wrapper {
+            flex: 1;
+            overflow-x: auto;
+            position: relative;
+        }
+
+        #timeline-track {
+            position: relative;
+            height: 30px;
+            min-width: 600px;
+            border-radius: 4px;
+            background-color: #181818;
+            border: 1px solid var(--border);
+        }
+
+        .timeline-block {
+            position: absolute;
+            top: 3px;
+            height: 24px;
+            border-radius: 4px;
+            background-image: linear-gradient(90deg, #4f46e5 0%, #6366f1 100%);
+            border: 1px solid rgba(255, 255, 255, 0.25);
+            display: flex;
+            align-items: center;
+            padding: 0 6px;
+            font-size: 0.7rem;
+            color: #fff;
+            white-space: nowrap;
+        }
+
+        .timeline-block.inactive {
+            background-image: none;
+            background-color: #444;
+            border-color: rgba(255, 255, 255, 0.15);
+            color: #ddd;
+        }
+
+        /* Properties Inputs */
+        .prop-row {
+            display: flex;
+            flex-direction: column;
+            margin-bottom: 6px;
+            font-size: 0.78rem;
+        }
+
+        .prop-row:last-child {
+            margin-bottom: 0;
+        }
+
+        .prop-row label {
+            display: block;
+            margin-bottom: 4px;
+            color: #94a3b8;
+            font-size: 0.65rem;
+            text-transform: uppercase;
+            letter-spacing: 0.12em;
+        }
+
+        .prop-input,
+        .prop-row select,
+        .prop-row textarea {
+            width: 100%;
+            padding: 7px 9px;
+            background-color: #020617;
+            border: 1px solid #262a33;
+            border-radius: 8px;
+            color: #e2e8f0;
+            font-family: inherit;
+            font-size: 0.78rem;
+            outline: none;
+            box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.6), 0 8px 20px rgba(0, 0, 0, 0.6);
+        }
+
+        .prop-input:focus,
+        .prop-row select:focus,
+        .prop-row textarea:focus {
+            outline: none;
+            border-color: var(--accent);
+            box-shadow: 0 0 0 1px rgba(79, 70, 229, 0.7), 0 10px 25px rgba(15, 23, 42, 0.8);
+        }
+
+        input[type="color"] {
+            height: 35px;
+            padding: 2px;
+            cursor: pointer;
+        }
+
+        .accordion-section {
+            border-bottom: 1px solid var(--border);
+        }
+
+        .accordion-header {
+            width: 100%;
+            padding: 10px 14px;
+            background-color: var(--bg-dark);
+            border: none;
+            border-bottom: 1px solid var(--border);
+            color: var(--text-highlight);
+            text-align: left;
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            cursor: pointer;
+        }
+
+        .accordion-header span {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .accordion-body {
+            display: none;
+            padding: 10px 12px 12px 12px;
+            background-color: #1b1b1b;
+        }
+
+        .accordion-body.open {
+            display: block;
+        }
+
+        /* Modal */
+        #json-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.85);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .modal-content {
+            background: var(--bg-panel);
+            width: 80%;
+            height: 80%;
+            padding: 25px;
+            border-radius: 8px;
+            display: flex;
+            flex-direction: column;
+            border: 1px solid var(--border);
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 15px;
+        }
+
+        .modal-header h3 {
+            margin: 0;
+            color: var(--text-highlight);
+        }
+
+        #json-textarea {
+            flex: 1;
+            font-family: 'Consolas', 'Monaco', monospace;
+            padding: 15px;
+            margin-bottom: 15px;
+            background-color: #111;
+            border: 1px solid var(--border);
+            color: #eee;
+            resize: none;
+        }
+
+        /* Video de fondo detrás del canvas */
+        #bg-video-el {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            z-index: 0;
+            background: #000;
+            pointer-events: none;
+        }
+
+        .template-card:hover .template-info {
+            color: var(--text-highlight);
+        }
+
+        /* Slidebar inside Modal */
+        #json-modal-slidebar {
+            position: absolute;
+            top: 0;
+            right: -100%; /* Hidden by default */
+            width: 400px;
+            height: 100%;
+            background: #111;
+            border-left: 1px solid var(--border);
+            transition: right 0.3s ease-in-out;
+            z-index: 50;
+            display: flex;
+            flex-direction: column;
+            box-shadow: -10px 0 30px rgba(0,0,0,0.5);
+            padding: 20px;
+        }
+
+        #json-modal-slidebar.open {
+            right: 0;
+        }
+
+        .modal-sidebar-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            display: none;
+            z-index: 40;
+        }
+
+        .modal-sidebar-overlay.open {
+            display: block;
+        }
+
+        /* Rejilla de Templates Estilo Instagram (100px) */
+        .templates-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, 100px);
+            gap: 20px;
+            padding: 10px;
+            justify-content: center;
+        }
+
+        .template-card {
+            width: 100px;
+            background: transparent;
+            border: none;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .template-card:hover {
+            transform: translateY(-5px);
+        }
+
+        .template-thumb {
+            width: 100px;
+            height: 100px;
+            background: #1e2128;
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            transition: border-color 0.2s;
+        }
+
+        .template-card:hover .template-thumb {
+            border-color: var(--accent);
+            box-shadow: 0 0 15px rgba(79, 70, 229, 0.4);
+        }
+
+        .template-thumb img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .template-info {
+            width: 100%;
+            font-size: 0.65rem;
+            font-weight: 500;
+            text-align: center;
+            color: var(--text-main);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        /* Estilos del Gestor de Diseños (Modal) */
+        .modal-content-gestor {
+            width: 90%;
+            height: 90%;
+            max-width: 1300px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .gestor-biblioteca-wrap {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
+            padding: 20px;
+        }
+
+        .template-card-actions {
+            padding: 12px;
+            font-weight: 600;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        /* Slidebar y Editor */
+        #json-modal-slidebar {
+            position: absolute;
+            top: 0;
+            right: -100%;
+            width: 450px;
+            height: 100%;
+            background: #0a0a0a;
+            border-left: 1px solid var(--border);
+            transition: right 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            z-index: 50;
+            display: flex;
+            flex-direction: column;
+            box-shadow: -15px 0 35px rgba(0,0,0,0.7);
+            padding: 0; /* Lo manejaremos por secciones */
+        }
+
+        #json-modal-slidebar.open {
+            right: 0;
+        }
+
+        .sidebar-header {
+            padding: 20px;
+            border-bottom: 1px solid #222;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .sidebar-body {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            padding: 20px;
+            gap: 20px;
+            min-height: 0;
+        }
+
+        #json-textarea {
+            flex: 1; /* Esto hace que ocupe todo el alto disponible */
+            width: 100%;
+            background: #000;
+            border: 1px solid #333;
+            border-radius: 8px;
+            color: #10b981; /* Un verde tipo código */
+            font-family: 'Fira Code', monospace;
+            font-size: 0.8rem;
+            padding: 15px;
+            resize: none;
+            outline: none;
+        }
+
+        #json-textarea:focus {
+            border-color: var(--accent);
+        }
+
+        .sidebar-footer {
+            padding: 20px;
+            border-top: 1px solid #222;
+            background: #0f0f0f;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div id="top-header">
+        <div id="top-header-left">
+            <i class="fas fa-layer-group" style="color:#4f46e5;"></i>
+            <div>
+                <div id="top-header-title">Unik Marketing</div>
+                <div id="top-header-subtitle">Editor de mascara para video</div>
+            </div>
+        </div>
+        <div id="top-header-right">
+            <span><i class="fas fa-film"></i> <span id="top-header-video-label">Sin video de fondo</span></span>
+            <span><i class="fas fa-cube"></i> <span id="top-header-block-label">Bloque activo: bloque_1</span></span>
+        </div>
+    </div>
+
+    <div id="layout-row">
+
+        <div id="main">
+
+            <div id="canvas-container">
+                <div class="canvas-wrapper" id="canvas-wrapper">
+                    <video id="bg-video-el" muted playsinline></video>
+                    <canvas id="c"></canvas>
+                </div>
+            </div>
+
+            <div id="timeline">
+                <div id="timeline-header">
+                    <span id="timeline-duration-label">Duración estimada: 0s</span>
+                    <span style="display:inline-flex; align-items:center; gap:10px;">
+                        <span style="display:inline-flex; align-items:center; gap:6px;">
+                            <i class="fas fa-ruler-combined"></i>
+                            <span id="canvas-size-display">1024 x 820</span>
+                        </span>
+                        <span style="display:inline-flex; align-items:center; gap:4px;">
+                            <span style="font-size:0.7rem; color:#888;">Zoom</span>
+                            <select id="workspace-zoom-select" class="prop-input"
+                                style="width:auto; padding:3px 6px; font-size:0.7rem;">
+                                <option value="0.25">25%</option>
+                                <option value="0.5">50%</option>
+                                <option value="0.75">75%</option>
+                                <option value="1" selected>100%</option>
+                                <option value="1.25">125%</option>
+                                <option value="1.5">150%</option>
+                                <option value="1.75">175%</option>
+                                <option value="2">200%</option>
+                            </select>
+                        </span>
+                    </span>
+                </div>
+            </div>
+        </div>
+
+        <div id="properties" class="panel-bg border-base">
+            <div class="accordion-section" id="accordion-config-section">
+                <button class="accordion-header" data-accordion-target="accordion-config">
+                    <span><i class="fas fa-sliders-h"></i> Configuración</span>
+                    <i class="fas fa-chevron-down" style="font-size: 0.7rem;"></i>
+                </button>
+                <div class="accordion-body" id="accordion-config">
+                    <div class="prop-row">
+                        <label>Video de Fondo</label>
+                        <div style="display:flex; align-items:center; gap:6px;">
+                            <i class="fas fa-video" style="color: #888;"></i>
+                            <input type="text" id="video-url-input" class="prop-input"
+                                placeholder="URL Video de Fondo (mp4/webm)" onchange="updateBackgroundVideo()">
+                            <button id="retry-video-btn" onclick="retryVideo()" title="Reintentar carga de video"
+                                style="display: none; background: none; border: none; color: #d9534f; cursor: pointer;">
+                                <i class="fas fa-redo"></i>
+                            </button>
+                        </div>
+                        <div style="display:flex; gap:6px; margin-top:6px;">
+                            <button class="btn btn-secondary" style="padding: 4px 8px; font-size: 0.75rem;"
+                                onclick="openVideoPreviewModal()" title="Elegir segundo de previsualización">
+                                <i class="fas fa-play-circle"></i>
+                            </button>
+                            <button id="bg-loop-btn" class="btn btn-secondary"
+                                style="padding: 4px 8px; font-size: 0.75rem;" onclick="toggleBackgroundLoop()"
+                                title="Reproducir/pausar fondo en bucle">
+                                <i class="fas fa-redo-alt"></i>
+                            </button>
+                            <button class="btn btn-secondary"
+                                style="padding: 4px 8px; font-size: 0.75rem; margin-left:auto;"
+                                onclick="updateCanvasSize()">
+                                Resize
+                            </button>
+                        </div>
+                    </div>
+                    <div style="margin-top:12px; display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                        <div class="prop-row">
+                            <label>Nombre Archivo Output</label>
+                            <input type="text" id="conf-nombre" class="prop-input" value="render_remoto.mp4">
+                        </div>
+                        <div class="prop-row">
+                            <label>Zoom (Post-Procesado)</label>
+                            <input type="number" id="conf-zoom" class="prop-input" value="1" step="0.1">
+                        </div>
+                        <div class="prop-row">
+                            <label>Inicio (seg)</label>
+                            <input type="text" id="conf-inicio" class="prop-input" value="0">
+                        </div>
+                        <div class="prop-row">
+                            <label>Fin (seg)</label>
+                            <input type="text" id="conf-fin" class="prop-input" value="5">
+                        </div>
+                        <div class="prop-row" style="grid-column: span 2;">
+                            <label>Logo URL</label>
+                            <input type="text" id="conf-logo" class="prop-input" placeholder="https://...">
+                        </div>
+                        <div class="prop-row" style="grid-column: span 2;">
+                            <label>Audio URL</label>
+                            <input type="text" id="conf-audio" class="prop-input" placeholder="https://... (Opcional)">
+                        </div>
+                        <div class="prop-row" style="grid-column: span 2;">
+                            <label>Créditos</label>
+                            <input type="text" id="conf-creditos" class="prop-input" placeholder="Ej: ViewHosting - Producciones 2024">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="accordion-section" id="accordion-tools-section">
+                <button class="accordion-header" data-accordion-target="accordion-tools">
+                    <span><i class="fas fa-toolbox"></i> Herramientas</span>
+                    <i class="fas fa-chevron-down" style="font-size: 0.7rem;"></i>
+                </button>
+                <div class="accordion-body open" id="accordion-tools">
+                    <div class="tool-grid">
+                        <button class="tool-btn full-width" onclick="addBlock()">
+                            <i class="fas fa-box"></i> Nuevo Bloque
+                        </button>
+
+                        <button class="tool-btn" onclick="addElement('texto')">
+                            <i class="fas fa-font"></i> Texto
+                        </button>
+                        <button class="tool-btn" onclick="addElement('rectangulo')">
+                            <i class="fas fa-square"></i> Rectángulo
+                        </button>
+
+                        <button class="tool-btn" onclick="addElement('imagen')">
+                            <i class="fas fa-image"></i> Imagen
+                        </button>
+                        <button class="tool-btn" onclick="addElement('video')">
+                            <i class="fas fa-video"></i> Video
+                        </button>
+                        <button class="tool-btn" onclick="addElement('marquesina')">
+                            <i class="fas fa-scroll"></i> Marquesina
+                        </button>
+
+                        <button class="tool-btn" onclick="addElement('texto_dos_columnas')">
+                            <i class="fas fa-columns"></i> 2 Cols
+                        </button>
+                        <button class="tool-btn" onclick="addElement('texto_varias_columnas')">
+                            <i class="fas fa-table"></i> N Cols
+                        </button>
+                        <button class="tool-btn" onclick="addElement('mapa')">
+                            <i class="fas fa-map-marked-alt"></i> Mapa
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="accordion-section" id="accordion-variables-section">
+                <button class="accordion-header" data-accordion-target="accordion-variables">
+                    <span><i class="fas fa-tags"></i> Variables Dinámicas</span>
+                    <i class="fas fa-chevron-down" style="font-size: 0.7rem;"></i>
+                </button>
+                <div class="accordion-body" id="accordion-variables">
+                    <div style="padding:10px; font-size:0.75rem; color:#aaa; line-height:1.4;">
+                        Copia estas etiquetas y pégalas en el contenido de tus textos para que se reemplacen automáticamente.
+                    </div>
+                    <div class="custom-scrollbar" style="max-height: 200px; overflow-y: auto; padding: 0 10px 10px 10px; display: flex; flex-direction: column; gap: 5px;">
+                        {% if variables.dinamicas is empty %}
+                            <div style="text-align:center; color:#555; padding: 10px; font-size:0.8rem;">El panel está vacío</div>
+                        {% else %}
+                            {% for key, val in variables.dinamicas %}
+                                <div style="background: #15171c; padding: 6px 10px; border-radius: 4px; border: 1px solid #262a33; display: flex; justify-content: space-between; align-items: center;">
+                                    <span style="color:#e2e8f0; font-family: monospace; font-size: 0.75rem;">{{ '{{' ~ key ~ '}}' }}</span>
+                                    <button onclick="navigator.clipboard.writeText('{{ '{{' ~ key ~ '}}' }}');" style="background: none; border: none; color: #4f46e5; cursor: pointer; font-size: 0.8rem;" title="Copiar etiqueta">
+                                        <i class="far fa-copy"></i>
+                                    </button>
+                                </div>
+                            {% endfor %}
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <div class="accordion-section" id="accordion-layers-section">
+                <button class="accordion-header" data-accordion-target="accordion-layers">
+                    <span><i class="fas fa-layer-group"></i> Capas / Bloques</span>
+                    <i class="fas fa-chevron-down" style="font-size: 0.7rem;"></i>
+                </button>
+                <div class="accordion-body" id="accordion-layers">
+                    <div id="layers-list" class="custom-scrollbar" style="max-height: 240px; overflow-y: auto;">
+                        <div style="padding:20px; text-align:center; color:#555; font-size:0.8rem;">
+                            No hay elementos
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="props-container"></div>
+        </div>
+
+    </div>
+
+    <!-- JSON MODAL -->
+    <div id="json-modal">
+        <div class="modal-content modal-content-gestor">
+            
+            <div class="modal-sidebar-overlay" id="modal-sidebar-overlay" onclick="toggleJsonSlidebar(false)"></div>
+
+            <div class="modal-header">
+                <div style="display: flex; align-items: center; gap: 15px;">
+                    <h3 style="margin:0;"><i class="fas fa-th-large"></i> Biblioteca de Diseños</h3>
+                    <button class="btn btn-secondary" onclick="saveCurrentAsNew()" style="font-size: 0.75rem;">
+                        <i class="fas fa-plus"></i> Guardar como Nueva Plantilla
+                    </button>
+                </div>
+                <div style="display: flex; gap: 10px;">
+                    <button class="btn btn-secondary" onclick="toggleJsonSlidebar(true)">
+                        <i class="fas fa-code"></i> Editor Manual
+                    </button>
+                    <button class="btn btn-secondary" onclick="closeJsonModal()"><i class="fas fa-times"></i></button>
+                </div>
+            </div>
+            
+            <div class="gestor-biblioteca-wrap">
+                <div class="custom-scrollbar" style="flex: 1; overflow-y: auto;">
+                    <div class="templates-grid">
+                        {% for template in templates %}
+                            <div class="template-card" onclick="loadTemplateById({{ template.id }})">
+                                <div class="template-thumb">
+                                    {% if template.thumbnail_base64 %}
+                                        <img src="{{ template.thumbnail_base64 }}" alt="{{ template.nombre }}">
+                                    {% else %}
+                                        <i class="fas fa-image" style="font-size: 1.5rem; color: #222;"></i>
+                                    {% endif %}
+                                </div>
+                                <div class="template-info">
+                                    {{ template.nombre }}
+                                </div>
+                                <script>
+                                    if(!window.SAVED_TEMPLATES) window.SAVED_TEMPLATES = {};
+                                    window.SAVED_TEMPLATES[{{ template.id }}] = {
+                                        nombre: "{{ template.nombre|e('js') }}",
+                                        data: {{ template.data_json|raw }}
+                                    };
+                                </script>
+                            </div>
+                        {% else %}
+                            <div style="text-align: center; color: #555; padding: 40px; font-size: 1rem; width: 100%;">
+                                <i class="fas fa-folder-open" style="font-size: 3rem; display: block; margin-bottom: 15px; opacity: 0.2;"></i>
+                                No tienes plantillas guardadas.
+                            </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- SLIDEBAR: EDITOR MANUAL -->
+            <div id="json-modal-slidebar">
+                <div class="sidebar-header">
+                    <h4 style="margin:0; font-size: 0.9rem; text-transform: uppercase;">Editor Manual</h4>
+                    <button class="btn btn-secondary" style="padding: 5px 8px;" onclick="toggleJsonSlidebar(false)"><i class="fas fa-arrow-right"></i></button>
+                </div>
+
+                <div class="sidebar-body">
+                    <label style="font-size: 0.7rem; color: #888; text-transform: uppercase; margin-bottom: -10px;">Código JSON</label>
+                    <textarea id="json-textarea" spellcheck="false"></textarea>
+                    
+                    <div id="template-active-actions" style="display: none; flex-direction: column; gap: 10px;">
+                        <button class="btn" onclick="saveCurrentChanges()" style="background: #22c55e;">
+                            <i class="fas fa-save"></i> Guardar Cambios
+                        </button>
+                        <button class="btn btn-secondary" onclick="deleteActiveTemplate()" style="color: #ef4444;">
+                            <i class="fas fa-trash"></i> Eliminar
+                        </button>
+                    </div>
+                </div>
+
+                <div class="sidebar-footer">
+                    <button class="btn" onclick="loadJsonFromModal()" style="width: 100%;">
+                        <i class="fas fa-upload"></i> Cargar desde Texto
+                    </button>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- SETTINGS MODAL -->
+    <div id="settings-modal" style="display: none;"></div>
+
+    <!-- VIDEO PREVIEW MODAL -->
+    <div id="video-preview-modal"
+        style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.85); z-index: 1000; justify-content: center; align-items: center;">
+        <div class="modal-content" style="width: 80%; max-width: 900px; height: auto; max-height: 90%; overflow: auto;">
+            <div class="modal-header">
+                <h3>Previsualizar video de fondo</h3>
+                <button class="btn btn-secondary" onclick="closeVideoPreviewModal()"><i
+                        class="fas fa-times"></i></button>
+            </div>
+            <div style="margin-bottom: 10px; font-size: 0.85rem; color: #ccc;">
+                Usa los controles para moverte al segundo deseado y aplícalo a la previsualización.
+            </div>
+            <video id="video-preview-player" controls style="width: 100%; max-height: 60vh; background: #000;"></video>
+            <div style="margin-top: 10px; text-align: right;">
+                <button class="btn btn-secondary" onclick="resetVideoPreviewTime()">Reiniciar</button>
+                <button class="btn" onclick="applyVideoPreviewTime()"><i class="fas fa-check"></i> Usar este
+                    segundo</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- RENDER RESULT MODAL -->
+    <div id="render-modal"
+        style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.85); z-index: 1000; justify-content: center; align-items: center;">
+        <div class="modal-content"
+            style="width: 80%; max-width: 1000px; height: auto; max-height: 90%; overflow: auto;">
+            <div class="modal-header">
+                <h3>Resultado de Render</h3>
+                <div style="display:flex; gap:8px;">
+                    <button class="btn btn-secondary" id="render-modal-min-btn" onclick="minimizeRenderModal()"
+                        title="Ocultar resultado">
+                        <i class="fas fa-window-minimize"></i>
+                    </button>
+                    <button class="btn btn-secondary" id="render-toggle-btn" onclick="toggleRenderVideo()"
+                        title="Ocultar/mostrar video">
+                        <i class="fas fa-compress"></i>
+                    </button>
+                    <button class="btn btn-secondary" onclick="closeRenderModal()"><i class="fas fa-times"></i></button>
+                </div>
+            </div>
+            <div id="render-status" style="margin-bottom: 15px; color: #bbb;">
+                <span id="render-status-text">Generando…</span>
+                <div id="render-progress-bar-container"
+                    style="display: none; width: 100%; background-color: #333; border-radius: 4px; margin-top: 8px; overflow: hidden;">
+                    <div id="render-progress-bar"
+                        style="width: 0%; height: 10px; background-color: #4f46e5; transition: width 0.2s;"></div>
+                </div>
+                <div id="render-log"
+                    style="margin-top: 10px; font-size: 0.75rem; color: #888; font-family: monospace; max-height: 100px; overflow-y: auto; background: #000; padding: 5px; border-radius: 4px; display:none;">
+                </div>
+            </div>
+            <div id="render-video-wrap" style="display: none;">
+                <video id="render-video" controls style="width: 100%; max-height: 60vh; background: #000;"></video>
+
+                <!-- Barra de progreso de subida (visible mientras sube) -->
+                <div id="upload-progress-wrap" style="display:none; margin-top:14px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+                        <span style="font-size:0.78rem; color:#93c5fd;">Preparando archivo para descarga...</span>
+                        <span id="upload-progress-label" style="font-size:0.78rem; color:#93c5fd; font-weight:bold;">0%</span>
+                    </div>
+                    <div style="width:100%; background:#1e293b; border-radius:6px; overflow:hidden; height:8px;">
+                        <div id="upload-progress-bar" style="width:0%; height:8px; background:linear-gradient(90deg,#4f46e5,#818cf8); transition:width 0.25s ease;"></div>
+                    </div>
+                </div>
+
+                <div style="margin-top: 15px; display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap;">
+                    <a id="render-video-link" href="#" target="_blank"
+                        style="color: #9cf; text-decoration: underline; font-size: 0.9rem;">Ver en pantalla completa</a>
+                    <div style="display: flex; gap: 10px; align-items:center;">
+                        <!-- Unico boton: deshabilitado mientras sube, reintenta subida si hubo error -->
+                        <button id="render-video-download-btn" class="btn" disabled
+                            style="background:#374151; cursor:not-allowed; border:none; opacity:0.85;">
+                            <i class="fas fa-spinner fa-spin"></i> &#x23F3; Preparando para descargar video... espere por favor.
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <pre id="render-error"
+                style="display: none; background: #111; color: #f88; border: 1px solid #333; padding: 15px; border-radius: 6px; max-height: 60vh; overflow: auto;"></pre>
+        </div>
+    </div>
+
+    <!-- Floating button to restore render modal (no afecta el proceso de render) -->
+    <button id="render-modal-toggle-fab" onclick="restoreRenderModal()"
+        style="position: fixed; bottom: 15px; right: 15px; z-index: 1001; display: none; padding: 8px 14px; background: #007acc; color: #fff; border: none; border-radius: 20px; cursor: pointer; font-size: 0.8rem;">
+        Ver resultado
+    </button>
+    <!-- Auto-load plantilla -->
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            {% if variables.dinamicas.PLANTILLA is defined and variables.dinamicas.PLANTILLA is not empty %}
+                const plantillaDeseada = "{{ variables.dinamicas.PLANTILLA | escape('js') }}";
+                
+                // Esperamos un momento para asegurar que canvas y módulos estén inicializados
+                setTimeout(() => {
+                    let foundId = null;
+                    if (window.SAVED_TEMPLATES) {
+                        for (let id in window.SAVED_TEMPLATES) {
+                            if (window.SAVED_TEMPLATES[id].nombre === plantillaDeseada) {
+                                foundId = id;
+                                break;
+                            }
+                        }
+                    }
+                    
+                    if (foundId && window.importJson) {
+                        console.log("Video API: Auto-cargando plantilla solicitada ->", plantillaDeseada);
+                        const templateData = window.SAVED_TEMPLATES[foundId].data;
+                        
+                        // Cargamos silenciosamente sin el 'confirm' dialog
+                        window.importJson(templateData);
+                        window.ACTIVE_TEMPLATE_ID = foundId;
+                        
+                        const jsonTextarea = document.getElementById('json-textarea');
+                        if (jsonTextarea) jsonTextarea.value = JSON.stringify(templateData, null, 4);
+                        
+                        const templateActiveActions = document.getElementById('template-active-actions');
+                        if (templateActiveActions) templateActiveActions.style.display = 'flex';
+                    } else {
+                        console.warn("Video API: No se encontró la plantilla '" + plantillaDeseada + "' para auto-carga.");
+                    }
+                }, 1000);
+            {% endif %}
+        });
+    </script>
+
+</body>
+
+</html>
